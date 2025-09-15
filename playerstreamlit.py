@@ -534,8 +534,10 @@ if all_events_data:
                     # Create table with unsuccessful saves details
                     save_data = []
                     for i, save in enumerate(unsuccessful_saves, 1):
-                        # Try to determine which match this save came from
+                        # Try to determine which match this save came from and find opponent team
                         match_info = f"Match {i}"
+                        opponent_team = "Unknown"
+                        
                         for match_idx, events_data in enumerate(all_events_data, 1):
                             events = events_data.get('data', []) if isinstance(events_data, dict) else []
                             for event in events:
@@ -544,6 +546,15 @@ if all_events_data:
                                     abs(event.get('startTimeMs', 0) - save['time'] * 60 * 1000) < 1000 and  # Within 1 second
                                     event.get('partId') == save['partId']):
                                     match_info = f"Match {match_idx}"
+                                    
+                                    # Find the opponent team by looking for shot events around the same time
+                                    for shot_event in events:
+                                        if (shot_event.get('baseTypeId') in [9, 10] and  # Shot or Goal events
+                                            abs(shot_event.get('startTimeMs', 0) - save['time'] * 60 * 1000) < 2000 and  # Within 2 seconds
+                                            shot_event.get('partId') == save['partId'] and
+                                            shot_event.get('teamName') != save['team']):  # Different team than goalkeeper's team
+                                            opponent_team = shot_event.get('teamName', 'Unknown')
+                                            break
                                     break
                             if match_info != f"Match {i}":
                                 break
@@ -555,7 +566,7 @@ if all_events_data:
                             'Part': f"Part {save['partId']}",
                             'xS': f"{save['xs']:.3f}",
                             'PSxG': f"{1.0 - save['xs']:.3f}",
-                            'Opponent': save['team']
+                            'Opponent': opponent_team
                         })
                     
                     # Display the table
