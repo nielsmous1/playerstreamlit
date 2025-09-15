@@ -373,10 +373,20 @@ if all_events_data:
             # Add PSxG faced for all save attempts (both successful and unsuccessful)
             # PSxG faced = 1 - xS for each save attempt
             player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
-            
+        
+        # Count goals allowed by grouping unsuccessful saves per goalkeeper
+        unsuccessful_saves_by_gk = {}
+        for gk_event in all_gk_events:
             if gk_event.get('is_unsuccessful_save', False):
-                # Count unsuccessful saves as goals allowed
-                player_stats[gk_name]['goals_allowed'] += 1
+                gk_name = gk_event['goalkeeper']
+                if gk_name not in unsuccessful_saves_by_gk:
+                    unsuccessful_saves_by_gk[gk_name] = []
+                unsuccessful_saves_by_gk[gk_name].append(gk_event)
+        
+        # Set goals allowed to the length of unsuccessful saves list for each goalkeeper
+        for gk_name, unsuccessful_saves in unsuccessful_saves_by_gk.items():
+            if gk_name in player_stats:
+                player_stats[gk_name]['goals_allowed'] = len(unsuccessful_saves)
         
         # Calculate PSxG - xG for each player
         for player in player_stats:
