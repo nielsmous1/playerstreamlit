@@ -146,9 +146,35 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
-        # Get all shot events and dribble events
+        # Function to find all shots faced by goalkeepers
+        def find_goalkeeper_events(events):
+            gk_events = []
+            for event in events:
+                # Check for shots (both on target and off target)
+                is_shot = 'shot' in str(event.get('baseTypeName', '')).lower()
+                event_labels = event.get('labels', []) or []
+                SHOT_LABELS = [128, 143, 144, 142]
+                has_shot_label = any(label in event_labels for label in SHOT_LABELS)
+                
+                if is_shot or has_shot_label:
+                    # Get the goalkeeper who faced this shot
+                    gk_name = event.get('goalkeeperName', 'Unknown')
+                    if gk_name and gk_name != 'Unknown':
+                        shot_info = {
+                            'team': event.get('teamName', 'Unknown'),
+                            'goalkeeper': gk_name,
+                            'psxg': event.get('metrics', {}).get('PSxG', 0.0),
+                            'is_goal': event.get('resultId') == 1,  # 1 = GOAL
+                            'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                            'partId': event.get('partId', 1)
+                        }
+                        gk_events.append(shot_info)
+            return gk_events
+
+        # Get all shot events, dribble events, and goalkeeper events
         all_shots = find_shot_events(all_events)
         all_dribbles = find_dribble_events(all_events)
+        all_gk_events = find_goalkeeper_events(all_events)
         
         # Calculate player minutes played
         def calculate_player_minutes(events):
@@ -296,6 +322,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
+                    'gk_performance': 0.0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
@@ -314,6 +341,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
+                    'gk_performance': 0.0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
@@ -321,6 +349,27 @@ if all_events_data:
             goal_progression = dribble['goal_progression']
             if goal_progression < 0:  # Negative means progression toward goal
                 player_stats[player_name]['pbd'] += abs(goal_progression)
+        
+        # Process goalkeeper events for GK performance calculation
+        for gk_event in all_gk_events:
+            gk_name = gk_event['goalkeeper']
+            if gk_name not in player_stats:
+                player_stats[gk_name] = {
+                    'team': gk_event['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'gk_performance': 0.0,
+                    'minutes_played': total_player_minutes.get(gk_name, 0)
+                }
+            
+            # Add PSxG faced
+            player_stats[gk_name]['gk_performance'] += gk_event['psxg']
+            
+            # Subtract goals allowed
+            if gk_event['is_goal']:
+                player_stats[gk_name]['gk_performance'] -= 1.0
         
         # Calculate PSxG - xG for each player
         for player in player_stats:
@@ -379,12 +428,14 @@ if all_events_data:
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
                     pbd_display = f"{stats['pbd'] * multiplier:.1f}"
+                    gk_performance_display = f"{stats['gk_performance'] * multiplier:.2f}"
                 else:
                     xg_display = f"{stats['xG']:.3f}"
                     psxg_display = f"{stats['PSxG']:.3f}"
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
                     shots_display = f"{stats['shots']:.0f}"
                     pbd_display = f"{stats['pbd']:.1f}"
+                    gk_performance_display = f"{stats['gk_performance']:.2f}"
                 
                 table_data.append({
                     'Rank': i + 1,
@@ -395,6 +446,7 @@ if all_events_data:
                     'PSxG': psxg_display,
                     'PSxG - xG': psxg_minus_xg_display,
                     'PBD': pbd_display,
+                    'GK Performance': gk_performance_display,
                     'Shots': shots_display
                 })
             
@@ -412,6 +464,7 @@ if all_events_data:
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
+                    "GK Performance": st.column_config.NumberColumn("GK Performance", width="small", format="%.2f", help="PSxG faced - Goals allowed"),
                     "Shots": st.column_config.NumberColumn("Shots", width="small")
                 }
             )
