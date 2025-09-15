@@ -147,21 +147,55 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
-        # Function to find all successful take-on events
+        # Function to find all take-on events (both successful and unsuccessful)
         def find_takeon_events(events):
             takeon_events = []
             for event in events:
-                # Check for successful take-on events (label 121)
+                # Check for take-on events (label 120) and successful take-ons (label 121)
                 event_labels = event.get('labels', []) or []
-                if 121 in event_labels:  # TAKE_ON_SUCCESS
+                if 120 in event_labels:  # TAKE_ON
+                    is_successful = 121 in event_labels  # TAKE_ON_SUCCESS
                     takeon_info = {
                         'team': event.get('teamName', 'Unknown'),
                         'player': event.get('playerName', 'Unknown'),
+                        'is_successful': is_successful,
                         'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
                         'partId': event.get('partId', 1)
                     }
                     takeon_events.append(takeon_info)
             return takeon_events
+
+        # Function to find successful passes to box
+        def find_passes_to_box_events(events):
+            pass_events = []
+            for event in events:
+                # Check for successful passes to box (label 72)
+                event_labels = event.get('labels', []) or []
+                if 72 in event_labels:  # DEEP_COMPLETION_SUCCESS
+                    pass_info = {
+                        'team': event.get('teamName', 'Unknown'),
+                        'player': event.get('playerName', 'Unknown'),
+                        'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                        'partId': event.get('partId', 1)
+                    }
+                    pass_events.append(pass_info)
+            return pass_events
+
+        # Function to find counter pressure events
+        def find_counter_pressure_events(events):
+            pressure_events = []
+            for event in events:
+                # Check for counter pressure events (label 215)
+                event_labels = event.get('labels', []) or []
+                if 215 in event_labels:  # PRESSURE_ZONE_HIGH
+                    pressure_info = {
+                        'team': event.get('teamName', 'Unknown'),
+                        'player': event.get('playerName', 'Unknown'),
+                        'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                        'partId': event.get('partId', 1)
+                    }
+                    pressure_events.append(pressure_info)
+            return pressure_events
 
         # Function to find all goalkeeper events (saves and unsuccessful saves)
         def find_goalkeeper_events(events):
@@ -191,10 +225,12 @@ if all_events_data:
                 
             return gk_events
 
-        # Get all shot events, dribble events, take-on events, and goalkeeper events
+        # Get all shot events, dribble events, take-on events, passes to box, counter pressures, and goalkeeper events
         all_shots = find_shot_events(all_events)
         all_dribbles = find_dribble_events(all_events)
         all_takeons = find_takeon_events(all_events)
+        all_passes_to_box = find_passes_to_box_events(all_events)
+        all_counter_pressures = find_counter_pressure_events(all_events)
         all_gk_events = find_goalkeeper_events(all_events)
         
         # Create a mapping of events to their source files
@@ -353,6 +389,9 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -375,6 +414,9 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -386,7 +428,7 @@ if all_events_data:
             if goal_progression < 0:  # Negative means progression toward goal
                 player_stats[player_name]['pbd'] += abs(goal_progression)
         
-        # Process take-ons for successful take-on count
+        # Process take-ons for successful and total take-on count
         for takeon in all_takeons:
             player_name = takeon['player']
             if player_name not in player_stats:
@@ -397,14 +439,67 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
+            # Count total take-ons
+            player_stats[player_name]['takeons_total'] += 1
+            
             # Count successful take-ons
-            player_stats[player_name]['takeons'] += 1
+            if takeon['is_successful']:
+                player_stats[player_name]['takeons'] += 1
+        
+        # Process passes to box
+        for pass_event in all_passes_to_box:
+            player_name = pass_event['player']
+            if player_name not in player_stats:
+                player_stats[player_name] = {
+                    'team': pass_event['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(player_name, 0)
+                }
+            
+            # Count successful passes to box
+            player_stats[player_name]['passes_to_box'] += 1
+        
+        # Process counter pressures
+        for pressure_event in all_counter_pressures:
+            player_name = pressure_event['player']
+            if player_name not in player_stats:
+                player_stats[player_name] = {
+                    'team': pressure_event['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(player_name, 0)
+                }
+            
+            # Count counter pressures
+            player_stats[player_name]['counter_pressures'] += 1
         
         # Process goalkeeper events for GK performance calculation
         for gk_event in all_gk_events:
@@ -417,6 +512,9 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -448,6 +546,13 @@ if all_events_data:
         # Calculate Goals Prevented for goalkeepers (PSxG Faced - Goals Allowed)
         for player in player_stats:
             player_stats[player]['goals_prevented'] = player_stats[player]['psxg_faced'] - player_stats[player]['goals_allowed']
+        
+        # Calculate take-on success percentage
+        for player in player_stats:
+            if player_stats[player]['takeons_total'] > 0:
+                player_stats[player]['takeon_success_pct'] = (player_stats[player]['takeons'] / player_stats[player]['takeons_total']) * 100
+            else:
+                player_stats[player]['takeon_success_pct'] = 0.0
         
         # Filter out invalid player names and sort by xG (descending)
         valid_players = {name: stats for name, stats in player_stats.items() 
@@ -504,6 +609,9 @@ if all_events_data:
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
                     pbd_display = f"{stats['pbd'] * multiplier:.1f}"
                     takeons_display = f"{stats['takeons'] * multiplier:.1f}"
+                    takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
+                    passes_to_box_display = f"{stats['passes_to_box'] * multiplier:.1f}"
+                    counter_pressures_display = f"{stats['counter_pressures'] * multiplier:.1f}"
                     goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
@@ -514,6 +622,9 @@ if all_events_data:
                     shots_display = f"{stats['shots']:.0f}"
                     pbd_display = f"{stats['pbd']:.1f}"
                     takeons_display = f"{stats['takeons']:.0f}"
+                    takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
+                    passes_to_box_display = f"{stats['passes_to_box']:.0f}"
+                    counter_pressures_display = f"{stats['counter_pressures']:.0f}"
                     goals_prevented_display = f"{stats['goals_prevented']:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced']:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed']:.0f}"
@@ -528,6 +639,9 @@ if all_events_data:
                     'PSxG - xG': psxg_minus_xg_display,
                     'PBD': pbd_display,
                     'Take-ons': takeons_display,
+                    'Take-on %': takeon_success_pct_display,
+                    'Passes to Box': passes_to_box_display,
+                    'Counter Pressures': counter_pressures_display,
                     'Goals Prevented': goals_prevented_display,
                     'PSxG Faced': psxg_faced_display,
                     'Goals Allowed': goals_allowed_display,
@@ -549,6 +663,9 @@ if all_events_data:
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
                     "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
+                    "Take-on %": st.column_config.TextColumn("Take-on %", width="small", help="Take-on success percentage"),
+                    "Passes to Box": st.column_config.NumberColumn("Passes to Box", width="small", format="%.0f", help="Successful passes to box (label 72)"),
+                    "Counter Pressures": st.column_config.NumberColumn("Counter Pressures", width="small", format="%.0f", help="Counter pressure actions (label 215)"),
                     "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
                     "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
                     "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
