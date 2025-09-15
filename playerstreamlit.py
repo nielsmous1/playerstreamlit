@@ -83,6 +83,8 @@ def parse_teams_from_filename(name: str):
 
 # Load all match files
 all_events_data = []
+file_names = []
+match_folder = "MatchEvents"
 if os.path.exists(match_folder):
     json_files = sorted([p for p in Path(match_folder).glob("*.json")])
     for p in json_files:
@@ -90,13 +92,12 @@ if os.path.exists(match_folder):
             events_data = load_json_lenient(str(p))
             if events_data:
                 all_events_data.append(events_data)
+                file_names.append(p.name)
         except Exception as e:
             st.warning(f"Failed to load {p.name}: {e}")
             continue
 else:
     st.warning("MatchEvents folder not found")
-
-
 
 # Main app
 if all_events_data:
@@ -165,7 +166,8 @@ if all_events_data:
                             'is_save': is_successful,
                             'is_unsuccessful_save': not is_successful,
                             'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
-                            'partId': event.get('partId', 1)
+                            'partId': event.get('partId', 1),
+                            'eventId': event.get('eventId', 'Unknown')
                         }
                         gk_events.append(save_info)
                 
@@ -175,6 +177,15 @@ if all_events_data:
         all_shots = find_shot_events(all_events)
         all_dribbles = find_dribble_events(all_events)
         all_gk_events = find_goalkeeper_events(all_events)
+        
+        # Create a mapping of events to their source files
+        events_to_file = {}
+        for file_idx, events_data in enumerate(all_events_data):
+            events = events_data.get('data', []) if isinstance(events_data, dict) else []
+            for event in events:
+                # Create a unique key for each event
+                event_key = f"{event.get('baseTypeId')}_{event.get('playerName')}_{event.get('startTimeMs')}_{event.get('partId')}"
+                events_to_file[event_key] = file_idx
         
         # Calculate player minutes played
         def calculate_player_minutes(events):
@@ -535,17 +546,18 @@ if all_events_data:
                     save_data = []
                     for i, save in enumerate(unsuccessful_saves, 1):
                         # Try to determine which match this save came from and find opponent team
-                        match_info = f"Match {i}"
+                        match_info = f"Unknown File"
                         opponent_team = "Unknown"
                         
-                        for match_idx, events_data in enumerate(all_events_data, 1):
+                        for match_idx, events_data in enumerate(all_events_data):
                             events = events_data.get('data', []) if isinstance(events_data, dict) else []
                             for event in events:
                                 if (event.get('baseTypeId') == 12 and 
                                     event.get('playerName') == selected_goalkeeper and
                                     abs(event.get('startTimeMs', 0) - save['time'] * 60 * 1000) < 1000 and  # Within 1 second
                                     event.get('partId') == save['partId']):
-                                    match_info = f"Match {match_idx}"
+                                    # Use the actual file name
+                                    match_info = file_names[match_idx] if match_idx < len(file_names) else f"File {match_idx + 1}"
                                     
                                     # Find the opponent team by looking for shot events around the same time
                                     for shot_event in events:
@@ -556,7 +568,7 @@ if all_events_data:
                                             opponent_team = shot_event.get('teamName', 'Unknown')
                                             break
                                     break
-                            if match_info != f"Match {i}":
+                            if match_info != f"Unknown File":
                                 break
                         
                         save_data.append({
@@ -564,6 +576,7 @@ if all_events_data:
                             'Match': match_info,
                             'Minute': f"{save['time']:.0f}'",
                             'Part': f"Part {save['partId']}",
+                            'Event ID': save['eventId'],
                             'xS': f"{save['xs']:.3f}",
                             'PSxG': f"{1.0 - save['xs']:.3f}",
                             'Opponent': opponent_team
@@ -579,6 +592,7 @@ if all_events_data:
                             "Match": st.column_config.TextColumn("Match", width="medium"),
                             "Minute": st.column_config.TextColumn("Minute", width="small"),
                             "Part": st.column_config.TextColumn("Part", width="small"),
+                            "Event ID": st.column_config.TextColumn("Event ID", width="small"),
                             "xS": st.column_config.NumberColumn("xS", width="small", format="%.3f"),
                             "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                             "Opponent": st.column_config.TextColumn("Opponent", width="small")
