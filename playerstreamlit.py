@@ -146,7 +146,7 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
-        # Function to find all goalkeeper events (saves, unsuccessful saves, and goals allowed)
+        # Function to find all goalkeeper events (saves and unsuccessful saves)
         def find_goalkeeper_events(events):
             gk_events = []
             for event in events:
@@ -169,22 +169,6 @@ if all_events_data:
                         }
                         gk_events.append(save_info)
                 
-                # Also check for goals (baseTypeId 10) to track goals allowed
-                elif event.get('baseTypeId') == 10:  # GOAL
-                    gk_name = event.get('goalkeeperName', 'Unknown')
-                    if gk_name and gk_name != 'Unknown':
-                        goal_info = {
-                            'team': event.get('teamName', 'Unknown'),
-                            'goalkeeper': gk_name,
-                            'xs': 0.0,
-                            'psxg': 0.0,
-                            'is_save': False,
-                            'is_unsuccessful_save': False,
-                            'is_goal': True,
-                            'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
-                            'partId': event.get('partId', 1)
-                        }
-                        gk_events.append(goal_info)
             return gk_events
 
         # Get all shot events, dribble events, and goalkeeper events
@@ -390,8 +374,8 @@ if all_events_data:
             # PSxG faced = 1 - xS for each save attempt
             player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
             
-            if gk_event.get('is_unsuccessful_save', False) or gk_event.get('is_goal', False):
-                # Count unsuccessful saves and goals as goals allowed
+            if gk_event.get('is_unsuccessful_save', False):
+                # Count unsuccessful saves as goals allowed
                 player_stats[gk_name]['goals_allowed'] += 1
         
         # Calculate PSxG - xG for each player
