@@ -130,6 +130,128 @@ if all_events_data:
         # Get all shot events
         all_shots = find_shot_events(all_events)
         
+        # Calculate player minutes played
+        def calculate_player_minutes(events):
+            """Calculate minutes played for each player based on substitutions and periods"""
+            player_minutes = {}
+            period_starts = {}
+            period_ends = {}
+            substitutions = {}
+            
+            # Find period start/end times
+            for event in events:
+                if event.get('baseTypeId') == 14:  # Period events
+                    part_id = event.get('partId', 1)
+                    time_ms = event.get('startTimeMs', 0)
+                    time_minutes = time_ms / 1000 / 60 if time_ms else 0
+                    
+                    if event.get('subTypeId') == 1400:  # Period start
+                        period_starts[part_id] = time_minutes
+                    elif event.get('subTypeId') == 1401:  # Period end
+                        period_ends[part_id] = time_minutes
+            
+            # Find substitutions
+            for event in events:
+                if event.get('baseTypeId') == 16:  # Substitution
+                    player_name = event.get('playerName', '')
+                    time_ms = event.get('startTimeMs', 0)
+                    time_minutes = time_ms / 1000 / 60 if time_ms else 0
+                    part_id = event.get('partId', 1)
+                    
+                    if event.get('subTypeId') == 1601:  # Subbed in
+                        if player_name not in substitutions:
+                            substitutions[player_name] = []
+                        substitutions[player_name].append({
+                            'type': 'in',
+                            'time': time_minutes,
+                            'part_id': part_id
+                        })
+                    elif event.get('subTypeId') == 1600:  # Subbed out
+                        if player_name not in substitutions:
+                            substitutions[player_name] = []
+                        substitutions[player_name].append({
+                            'type': 'out',
+                            'time': time_minutes,
+                            'part_id': part_id
+                        })
+            
+            # Find red cards
+            red_cards = {}
+            for event in events:
+                if event.get('baseTypeId') == 15:  # Card events
+                    if event.get('subTypeId') in [1501, 1502]:  # Red card
+                        player_name = event.get('playerName', '')
+                        time_ms = event.get('startTimeMs', 0)
+                        time_minutes = time_ms / 1000 / 60 if time_ms else 0
+                        part_id = event.get('partId', 1)
+                        red_cards[player_name] = {
+                            'time': time_minutes,
+                            'part_id': part_id
+                        }
+            
+            # Calculate minutes for each player
+            all_players = set()
+            for event in events:
+                player_name = event.get('playerName', '')
+                if player_name:
+                    all_players.add(player_name)
+            
+            for player_name in all_players:
+                total_minutes = 0
+                
+                # Get player's substitution events
+                player_subs = substitutions.get(player_name, [])
+                
+                # Sort by time
+                player_subs.sort(key=lambda x: x['time'])
+                
+                # Determine start and end times for each period
+                for part_id in [1, 2]:
+                    period_start = period_starts.get(part_id, 0 if part_id == 1 else 45)
+                    period_end = period_ends.get(part_id, 45 if part_id == 1 else 90)
+                    
+                    # Find when player entered this period
+                    player_entered = None
+                    for sub in player_subs:
+                        if sub['part_id'] == part_id and sub['type'] == 'in':
+                            player_entered = sub['time']
+                            break
+                    
+                    # If not subbed in, assume they started the period
+                    if player_entered is None:
+                        player_entered = period_start
+                    
+                    # Find when player left this period
+                    player_left = None
+                    
+                    # Check for substitution out
+                    for sub in player_subs:
+                        if sub['part_id'] == part_id and sub['type'] == 'out' and sub['time'] > player_entered:
+                            player_left = sub['time']
+                            break
+                    
+                    # Check for red card
+                    if player_name in red_cards:
+                        red_card = red_cards[player_name]
+                        if red_card['part_id'] == part_id and red_card['time'] > player_entered:
+                            if player_left is None or red_card['time'] < player_left:
+                                player_left = red_card['time']
+                    
+                    # If no exit event, player played until end of period
+                    if player_left is None:
+                        player_left = period_end
+                    
+                    # Add minutes for this period
+                    if player_entered < player_left:
+                        total_minutes += player_left - player_entered
+                
+                player_minutes[player_name] = total_minutes
+            
+            return player_minutes
+        
+        # Calculate minutes played for all players
+        player_minutes = calculate_player_minutes(all_events)
+        
         # Calculate player statistics
         player_stats = {}
         for shot in all_shots:
@@ -139,7 +261,8 @@ if all_events_data:
                     'team': shot['team'],
                     'xG': 0.0,
                     'PSxG': 0.0,
-                    'shots': 0
+                    'shots': 0,
+                    'minutes_played': player_minutes.get(player_name, 0)
                 }
             
             player_stats[player_name]['xG'] += shot['xG']
@@ -154,9 +277,11 @@ if all_events_data:
         # Sort players by xG (descending)
         sorted_players = sorted(player_stats.items(), key=lambda x: x[1]['xG'], reverse=True)
         
-        # Player selector
+        # Player selector and filters
         st.subheader("Player Performance Analysis")
-        col1, col2 = st.columns([1, 3])
+        
+        # Filters
+        col1, col2, col3 = st.columns([1, 1, 2])
         
         with col1:
             num_players = st.selectbox(
@@ -166,21 +291,51 @@ if all_events_data:
             )
         
         with col2:
-            st.write(f"Showing top {min(num_players, len(sorted_players))} players by xG")
+            min_minutes = st.slider(
+                "Minimum minutes played:",
+                min_value=0,
+                max_value=180,
+                value=0,
+                step=5
+            )
+        
+        with col3:
+            per_96_minutes = st.checkbox("Show stats per 96 minutes", value=False)
+            if per_96_minutes:
+                st.caption("Stats will be normalized to 96 minutes (full match equivalent)")
+        
+        # Filter players by minimum minutes
+        filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
+        
+        st.write(f"Showing top {min(num_players, len(filtered_players))} players by xG (min. {min_minutes} minutes played)")
         
         # Create player table
-        if sorted_players:
+        if filtered_players:
             # Prepare data for the table
             table_data = []
-            for i, (player_name, stats) in enumerate(sorted_players[:num_players]):
+            for i, (player_name, stats) in enumerate(filtered_players[:num_players]):
+                # Calculate per-96-minutes stats if requested
+                if per_96_minutes and stats['minutes_played'] > 0:
+                    multiplier = 96 / stats['minutes_played']
+                    xg_display = f"{stats['xG'] * multiplier:.3f}"
+                    psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
+                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
+                    shots_display = f"{stats['shots'] * multiplier:.1f}"
+                else:
+                    xg_display = f"{stats['xG']:.3f}"
+                    psxg_display = f"{stats['PSxG']:.3f}"
+                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
+                    shots_display = f"{stats['shots']:.0f}"
+                
                 table_data.append({
                     'Rank': i + 1,
                     'Player': player_name,
                     'Team': stats['team'],
-                    'xG': f"{stats['xG']:.3f}",
-                    'PSxG': f"{stats['PSxG']:.3f}",
-                    'PSxG - xG': f"{stats['PSxG_minus_xG']:.3f}",
-                    'Shots': stats['shots']
+                    'Minutes': f"{stats['minutes_played']:.0f}",
+                    'xG': xg_display,
+                    'PSxG': psxg_display,
+                    'PSxG - xG': psxg_minus_xg_display,
+                    'Shots': shots_display
                 })
             
             # Display the table
@@ -192,6 +347,7 @@ if all_events_data:
                     "Rank": st.column_config.NumberColumn("Rank", width="small"),
                     "Player": st.column_config.TextColumn("Player", width="medium"),
                     "Team": st.column_config.TextColumn("Team", width="small"),
+                    "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
                     "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
@@ -199,4 +355,7 @@ if all_events_data:
                 }
             )
         else:
-            st.info("No shot data found for player analysis.")
+            if min_minutes > 0:
+                st.info(f"No players found with at least {min_minutes} minutes played.")
+            else:
+                st.info("No shot data found for player analysis.")
