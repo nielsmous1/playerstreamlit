@@ -127,8 +127,28 @@ if all_events_data:
                     shot_events.append(shot_info)
             return shot_events
 
-        # Get all shot events
+        # Function to find all successful dribble events
+        def find_dribble_events(events):
+            dribble_events = []
+            for event in events:
+                # Check for successful dribble/carry events
+                if (event.get('baseTypeId') == 3 and  # DRIBBLE
+                    event.get('subTypeId') == 300 and  # CARRY
+                    event.get('resultId') == 1):  # SUCCESSFUL
+                    
+                    dribble_info = {
+                        'team': event.get('teamName', 'Unknown'),
+                        'player': event.get('playerName', 'Unknown'),
+                        'goal_progression': event.get('metrics', {}).get('goalProgression', 0.0),
+                        'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                        'partId': event.get('partId', 1)
+                    }
+                    dribble_events.append(dribble_info)
+            return dribble_events
+
+        # Get all shot events and dribble events
         all_shots = find_shot_events(all_events)
+        all_dribbles = find_dribble_events(all_events)
         
         # Calculate player minutes played
         def calculate_player_minutes(events):
@@ -265,6 +285,8 @@ if all_events_data:
         
         # Calculate player statistics
         player_stats = {}
+        
+        # Process shots
         for shot in all_shots:
             player_name = shot['player']
             if player_name not in player_stats:
@@ -273,6 +295,7 @@ if all_events_data:
                     'xG': 0.0,
                     'PSxG': 0.0,
                     'shots': 0,
+                    'pbd': 0.0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
@@ -280,6 +303,24 @@ if all_events_data:
             player_stats[player_name]['shots'] += 1
             if shot['PSxG'] is not None:
                 player_stats[player_name]['PSxG'] += shot['PSxG']
+        
+        # Process dribbles for PBD calculation
+        for dribble in all_dribbles:
+            player_name = dribble['player']
+            if player_name not in player_stats:
+                player_stats[player_name] = {
+                    'team': dribble['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'minutes_played': total_player_minutes.get(player_name, 0)
+                }
+            
+            # Add goal progression (negative means closer to goal, so we add the negative value)
+            goal_progression = dribble['goal_progression']
+            if goal_progression < 0:  # Negative means progression toward goal
+                player_stats[player_name]['pbd'] += abs(goal_progression)
         
         # Calculate PSxG - xG for each player
         for player in player_stats:
@@ -337,11 +378,13 @@ if all_events_data:
                     psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
+                    pbd_display = f"{stats['pbd'] * multiplier:.1f}"
                 else:
                     xg_display = f"{stats['xG']:.3f}"
                     psxg_display = f"{stats['PSxG']:.3f}"
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
                     shots_display = f"{stats['shots']:.0f}"
+                    pbd_display = f"{stats['pbd']:.1f}"
                 
                 table_data.append({
                     'Rank': i + 1,
@@ -351,6 +394,7 @@ if all_events_data:
                     'xG': xg_display,
                     'PSxG': psxg_display,
                     'PSxG - xG': psxg_minus_xg_display,
+                    'PBD': pbd_display,
                     'Shots': shots_display
                 })
             
@@ -367,6 +411,7 @@ if all_events_data:
                     "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
+                    "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
                     "Shots": st.column_config.NumberColumn("Shots", width="small")
                 }
             )
