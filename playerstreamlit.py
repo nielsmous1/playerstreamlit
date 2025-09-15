@@ -147,6 +147,22 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
+        # Function to find all successful take-on events
+        def find_takeon_events(events):
+            takeon_events = []
+            for event in events:
+                # Check for successful take-on events (label 121)
+                event_labels = event.get('labels', []) or []
+                if 121 in event_labels:  # TAKE_ON_SUCCESS
+                    takeon_info = {
+                        'team': event.get('teamName', 'Unknown'),
+                        'player': event.get('playerName', 'Unknown'),
+                        'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                        'partId': event.get('partId', 1)
+                    }
+                    takeon_events.append(takeon_info)
+            return takeon_events
+
         # Function to find all goalkeeper events (saves and unsuccessful saves)
         def find_goalkeeper_events(events):
             gk_events = []
@@ -175,9 +191,10 @@ if all_events_data:
                 
             return gk_events
 
-        # Get all shot events, dribble events, and goalkeeper events
+        # Get all shot events, dribble events, take-on events, and goalkeeper events
         all_shots = find_shot_events(all_events)
         all_dribbles = find_dribble_events(all_events)
+        all_takeons = find_takeon_events(all_events)
         all_gk_events = find_goalkeeper_events(all_events)
         
         # Create a mapping of events to their source files
@@ -335,6 +352,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
+                    'takeons': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -356,6 +374,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
+                    'takeons': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -367,6 +386,26 @@ if all_events_data:
             if goal_progression < 0:  # Negative means progression toward goal
                 player_stats[player_name]['pbd'] += abs(goal_progression)
         
+        # Process take-ons for successful take-on count
+        for takeon in all_takeons:
+            player_name = takeon['player']
+            if player_name not in player_stats:
+                player_stats[player_name] = {
+                    'team': takeon['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'takeons': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(player_name, 0)
+                }
+            
+            # Count successful take-ons
+            player_stats[player_name]['takeons'] += 1
+        
         # Process goalkeeper events for GK performance calculation
         for gk_event in all_gk_events:
             gk_name = gk_event['goalkeeper']
@@ -377,6 +416,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
+                    'takeons': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -409,8 +449,10 @@ if all_events_data:
         for player in player_stats:
             player_stats[player]['goals_prevented'] = player_stats[player]['psxg_faced'] - player_stats[player]['goals_allowed']
         
-        # Sort players by xG (descending)
-        sorted_players = sorted(player_stats.items(), key=lambda x: x[1]['xG'], reverse=True)
+        # Filter out invalid player names and sort by xG (descending)
+        valid_players = {name: stats for name, stats in player_stats.items() 
+                        if name and name != 'NOT_APPLICABLE' and name != 'Unknown' and name.strip()}
+        sorted_players = sorted(valid_players.items(), key=lambda x: x[1]['xG'], reverse=True)
         
         st.subheader("Player Performance Analysis")
         
@@ -428,7 +470,7 @@ if all_events_data:
             min_minutes = st.slider(
                 "Minimum minutes played:",
                 min_value=0,
-                max_value=180,
+                max_value=500,
                 value=0,
                 step=5
             )
@@ -461,6 +503,7 @@ if all_events_data:
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
                     pbd_display = f"{stats['pbd'] * multiplier:.1f}"
+                    takeons_display = f"{stats['takeons'] * multiplier:.1f}"
                     goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
@@ -470,6 +513,7 @@ if all_events_data:
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
                     shots_display = f"{stats['shots']:.0f}"
                     pbd_display = f"{stats['pbd']:.1f}"
+                    takeons_display = f"{stats['takeons']:.0f}"
                     goals_prevented_display = f"{stats['goals_prevented']:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced']:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed']:.0f}"
@@ -483,6 +527,7 @@ if all_events_data:
                     'PSxG': psxg_display,
                     'PSxG - xG': psxg_minus_xg_display,
                     'PBD': pbd_display,
+                    'Take-ons': takeons_display,
                     'Goals Prevented': goals_prevented_display,
                     'PSxG Faced': psxg_faced_display,
                     'Goals Allowed': goals_allowed_display,
@@ -503,6 +548,7 @@ if all_events_data:
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
+                    "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
                     "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
                     "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
                     "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
