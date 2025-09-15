@@ -146,19 +146,24 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
-        # Function to find all goalkeeper events (saves and goals allowed)
+        # Function to find all goalkeeper events (saves, unsuccessful saves, and goals allowed)
         def find_goalkeeper_events(events):
             gk_events = []
             for event in events:
                 # Check for save events (baseTypeId 12)
-                if event.get('baseTypeId') == 12:  # SAVE
+                if event.get('baseTypeId') == 12:  # KEEPER_SAVE
                     gk_name = event.get('playerName', 'Unknown')
                     if gk_name and gk_name != 'Unknown':
+                        result_id = event.get('resultId', 1)
+                        is_successful = result_id == 1  # 1 = SUCCESSFUL, 0 = UNSUCCESSFUL
+                        
                         save_info = {
                             'team': event.get('teamName', 'Unknown'),
                             'goalkeeper': gk_name,
                             'xs': event.get('metrics', {}).get('xS', 0.0),
-                            'is_save': True,
+                            'psxg': event.get('metrics', {}).get('PSxG', 0.0),
+                            'is_save': is_successful,
+                            'is_unsuccessful_save': not is_successful,
                             'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
                             'partId': event.get('partId', 1)
                         }
@@ -172,7 +177,10 @@ if all_events_data:
                             'team': event.get('teamName', 'Unknown'),
                             'goalkeeper': gk_name,
                             'xs': 0.0,
+                            'psxg': 0.0,
                             'is_save': False,
+                            'is_unsuccessful_save': False,
+                            'is_goal': True,
                             'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
                             'partId': event.get('partId', 1)
                         }
@@ -331,6 +339,8 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'gk_performance': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
@@ -350,6 +360,8 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'gk_performance': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
@@ -369,14 +381,20 @@ if all_events_data:
                     'shots': 0,
                     'pbd': 0.0,
                     'gk_performance': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(gk_name, 0)
                 }
+            
+            # Add PSxG faced for all save attempts (both successful and unsuccessful)
+            player_stats[gk_name]['psxg_faced'] += gk_event['psxg']
             
             if gk_event['is_save']:
                 # Add xS (expected saves) - this is 1 - PSxG
                 player_stats[gk_name]['gk_performance'] += gk_event['xs']
-            else:
-                # Subtract goals allowed (each goal is -1)
+            elif gk_event.get('is_unsuccessful_save', False) or gk_event.get('is_goal', False):
+                # Count unsuccessful saves and goals as goals allowed
+                player_stats[gk_name]['goals_allowed'] += 1
                 player_stats[gk_name]['gk_performance'] -= 1.0
         
         # Calculate PSxG - xG for each player
@@ -437,6 +455,8 @@ if all_events_data:
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
                     pbd_display = f"{stats['pbd'] * multiplier:.1f}"
                     gk_performance_display = f"{stats['gk_performance'] * multiplier:.2f}"
+                    psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
+                    goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
                 else:
                     xg_display = f"{stats['xG']:.3f}"
                     psxg_display = f"{stats['PSxG']:.3f}"
@@ -444,6 +464,8 @@ if all_events_data:
                     shots_display = f"{stats['shots']:.0f}"
                     pbd_display = f"{stats['pbd']:.1f}"
                     gk_performance_display = f"{stats['gk_performance']:.2f}"
+                    psxg_faced_display = f"{stats['psxg_faced']:.2f}"
+                    goals_allowed_display = f"{stats['goals_allowed']:.0f}"
                 
                 table_data.append({
                     'Rank': i + 1,
@@ -455,6 +477,8 @@ if all_events_data:
                     'PSxG - xG': psxg_minus_xg_display,
                     'PBD': pbd_display,
                     'GK Performance': gk_performance_display,
+                    'PSxG Faced': psxg_faced_display,
+                    'Goals Allowed': goals_allowed_display,
                     'Shots': shots_display
                 })
             
@@ -473,6 +497,8 @@ if all_events_data:
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
                     "GK Performance": st.column_config.NumberColumn("GK Performance", width="small", format="%.2f", help="Goals prevented (xS from saves - Goals allowed)"),
+                    "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
+                    "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
                     "Shots": st.column_config.NumberColumn("Shots", width="small")
                 }
             )
