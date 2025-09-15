@@ -156,7 +156,9 @@ if all_events_data:
                     gk_name = event.get('playerName', 'Unknown')
                     if gk_name and gk_name != 'Unknown':
                         result_id = event.get('resultId', 1)
-                        is_successful = result_id == 1  # 1 = SUCCESSFUL, 0 = UNSUCCESSFUL
+                        is_successful = result_id == 1  # 1 = SUCCESSFUL
+                        is_unsuccessful = result_id == 0  # 0 = UNSUCCESSFUL (only this counts as goal allowed)
+                        # resultId == 3 means penalty wide/over goal, not a goal allowed
                         
                         save_info = {
                             'team': event.get('teamName', 'Unknown'),
@@ -164,7 +166,7 @@ if all_events_data:
                             'xs': event.get('metrics', {}).get('xS', 0.0),
                             'psxg': event.get('metrics', {}).get('PSxG', 0.0),
                             'is_save': is_successful,
-                            'is_unsuccessful_save': not is_successful,
+                            'is_unsuccessful_save': is_unsuccessful,
                             'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
                             'partId': event.get('partId', 1),
                             'eventId': event.get('eventId', 'Unknown')
@@ -410,195 +412,105 @@ if all_events_data:
         # Sort players by xG (descending)
         sorted_players = sorted(player_stats.items(), key=lambda x: x[1]['xG'], reverse=True)
         
-        # Create tabs for different views
-        tab1, tab2 = st.tabs(["Player Performance Analysis", "Goalkeeper Save Analysis"])
+        st.subheader("Player Performance Analysis")
         
-        with tab1:
-            st.subheader("Player Performance Analysis")
-            
-            # Filters
-            col1, col2, col3 = st.columns([1, 1, 2])
+        # Filters
+        col1, col2, col3 = st.columns([1, 1, 2])
+    
+        with col1:
+            num_players = st.selectbox(
+                "Number of players to show:",
+                options=[10, 20, 50, 100, len(sorted_players)],
+                index=0
+            )
         
-            with col1:
-                num_players = st.selectbox(
-                    "Number of players to show:",
-                    options=[10, 20, 50, 100, len(sorted_players)],
-                    index=0
-                )
-            
-            with col2:
-                min_minutes = st.slider(
-                    "Minimum minutes played:",
-                    min_value=0,
-                    max_value=180,
-                    value=0,
-                    step=5
-                )
-            
-            with col3:
-                per_96_minutes = st.checkbox("Show stats per 96 minutes", value=False)
-                if per_96_minutes:
-                    st.caption("Stats will be normalized to 96 minutes (full match equivalent)")
-            
-            # Filter players by minimum minutes
-            filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
-            
-            # Display summary
-            st.write(f"**Analysis Summary:**")
-            st.write(f"• {len(all_events_data)} matches analyzed")
-            st.write(f"• {len(total_player_minutes)} total players found")
-            st.write(f"• {len(filtered_players)} players with ≥{min_minutes} minutes played")
-            st.write(f"• Showing top {min(num_players, len(filtered_players))} players by xG")
-            
-            # Create player table
-            if filtered_players:
-                # Prepare data for the table
-                table_data = []
-                for i, (player_name, stats) in enumerate(filtered_players[:num_players]):
-                    # Calculate per-96-minutes stats if requested
-                    if per_96_minutes and stats['minutes_played'] > 0:
-                        multiplier = 96 / stats['minutes_played']
-                        xg_display = f"{stats['xG'] * multiplier:.3f}"
-                        psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
-                        psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
-                        shots_display = f"{stats['shots'] * multiplier:.1f}"
-                        pbd_display = f"{stats['pbd'] * multiplier:.1f}"
-                        goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
-                        psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
-                        goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
-                    else:
-                        xg_display = f"{stats['xG']:.3f}"
-                        psxg_display = f"{stats['PSxG']:.3f}"
-                        psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
-                        shots_display = f"{stats['shots']:.0f}"
-                        pbd_display = f"{stats['pbd']:.1f}"
-                        goals_prevented_display = f"{stats['goals_prevented']:.2f}"
-                        psxg_faced_display = f"{stats['psxg_faced']:.2f}"
-                        goals_allowed_display = f"{stats['goals_allowed']:.0f}"
-                    
-                    table_data.append({
-                        'Rank': i + 1,
-                        'Player': player_name,
-                        'Team': stats['team'],
-                        'Minutes': f"{stats['minutes_played']:.0f}",
-                        'xG': xg_display,
-                        'PSxG': psxg_display,
-                        'PSxG - xG': psxg_minus_xg_display,
-                        'PBD': pbd_display,
-                        'Goals Prevented': goals_prevented_display,
-                        'PSxG Faced': psxg_faced_display,
-                        'Goals Allowed': goals_allowed_display,
-                        'Shots': shots_display
-                    })
-                
-                # Display the table
-                st.dataframe(
-                    table_data,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Rank": st.column_config.NumberColumn("Rank", width="small"),
-                        "Player": st.column_config.TextColumn("Player", width="medium"),
-                        "Team": st.column_config.TextColumn("Team", width="small"),
-                        "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
-                        "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
-                        "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
-                        "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
-                        "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
-                        "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
-                        "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
-                        "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
-                        "Shots": st.column_config.NumberColumn("Shots", width="small")
-                    }
-                )
-            else:
-                if min_minutes > 0:
-                    st.info(f"No players found with at least {min_minutes} minutes played.")
+        with col2:
+            min_minutes = st.slider(
+                "Minimum minutes played:",
+                min_value=0,
+                max_value=180,
+                value=0,
+                step=5
+            )
+        
+        with col3:
+            per_96_minutes = st.checkbox("Show stats per 96 minutes", value=False)
+            if per_96_minutes:
+                st.caption("Stats will be normalized to 96 minutes (full match equivalent)")
+        
+        # Filter players by minimum minutes
+        filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
+        
+        # Display summary
+        st.write(f"**Analysis Summary:**")
+        st.write(f"• {len(all_events_data)} matches analyzed")
+        st.write(f"• {len(total_player_minutes)} total players found")
+        st.write(f"• {len(filtered_players)} players with ≥{min_minutes} minutes played")
+        st.write(f"• Showing top {min(num_players, len(filtered_players))} players by xG")
+        
+        # Create player table
+        if filtered_players:
+            # Prepare data for the table
+            table_data = []
+            for i, (player_name, stats) in enumerate(filtered_players[:num_players]):
+                # Calculate per-96-minutes stats if requested
+                if per_96_minutes and stats['minutes_played'] > 0:
+                    multiplier = 96 / stats['minutes_played']
+                    xg_display = f"{stats['xG'] * multiplier:.3f}"
+                    psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
+                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
+                    shots_display = f"{stats['shots'] * multiplier:.1f}"
+                    pbd_display = f"{stats['pbd'] * multiplier:.1f}"
+                    goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
+                    psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
+                    goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
                 else:
-                    st.info("No shot data found for player analysis.")
-        
-        with tab2:
-            st.subheader("Goalkeeper Save Analysis")
-            
-            # Get all goalkeepers who have faced shots
-            goalkeepers = [name for name, stats in player_stats.items() if stats['psxg_faced'] > 0]
-            
-            if goalkeepers:
-                # Player selector
-                selected_goalkeeper = st.selectbox(
-                    "Select Goalkeeper:",
-                    options=goalkeepers,
-                    index=0
-                )
+                    xg_display = f"{stats['xG']:.3f}"
+                    psxg_display = f"{stats['PSxG']:.3f}"
+                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
+                    shots_display = f"{stats['shots']:.0f}"
+                    pbd_display = f"{stats['pbd']:.1f}"
+                    goals_prevented_display = f"{stats['goals_prevented']:.2f}"
+                    psxg_faced_display = f"{stats['psxg_faced']:.2f}"
+                    goals_allowed_display = f"{stats['goals_allowed']:.0f}"
                 
-                # Get unsuccessful saves for selected goalkeeper
-                unsuccessful_saves = []
-                for gk_event in all_gk_events:
-                    if (gk_event.get('goalkeeper') == selected_goalkeeper and 
-                        gk_event.get('is_unsuccessful_save', False)):
-                        unsuccessful_saves.append(gk_event)
-                
-                if unsuccessful_saves:
-                    st.write(f"**{selected_goalkeeper} - Unsuccessful Saves:**")
-                    st.write(f"Total: {len(unsuccessful_saves)} unsuccessful saves")
-                    
-                    # Create table with unsuccessful saves details
-                    save_data = []
-                    for i, save in enumerate(unsuccessful_saves, 1):
-                        # Try to determine which match this save came from and find opponent team
-                        match_info = f"Unknown File"
-                        opponent_team = "Unknown"
-                        
-                        for match_idx, events_data in enumerate(all_events_data):
-                            events = events_data.get('data', []) if isinstance(events_data, dict) else []
-                            for event in events:
-                                if (event.get('baseTypeId') == 12 and 
-                                    event.get('playerName') == selected_goalkeeper and
-                                    abs(event.get('startTimeMs', 0) - save['time'] * 60 * 1000) < 1000 and  # Within 1 second
-                                    event.get('partId') == save['partId']):
-                                    # Use the actual file name
-                                    match_info = file_names[match_idx] if match_idx < len(file_names) else f"File {match_idx + 1}"
-                                    
-                                    # Find the opponent team by looking for shot events around the same time
-                                    for shot_event in events:
-                                        if (shot_event.get('baseTypeId') in [9, 10] and  # Shot or Goal events
-                                            abs(shot_event.get('startTimeMs', 0) - save['time'] * 60 * 1000) < 2000 and  # Within 2 seconds
-                                            shot_event.get('partId') == save['partId'] and
-                                            shot_event.get('teamName') != save['team']):  # Different team than goalkeeper's team
-                                            opponent_team = shot_event.get('teamName', 'Unknown')
-                                            break
-                                    break
-                            if match_info != f"Unknown File":
-                                break
-                        
-                        save_data.append({
-                            'Save #': i,
-                            'Match': match_info,
-                            'Minute': f"{save['time']:.0f}'",
-                            'Part': f"Part {save['partId']}",
-                            'Event ID': save['eventId'],
-                            'xS': f"{save['xs']:.3f}",
-                            'PSxG': f"{1.0 - save['xs']:.3f}",
-                            'Opponent': opponent_team
-                        })
-                    
-                    # Display the table
-                    st.dataframe(
-                        save_data,
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Save #": st.column_config.NumberColumn("Save #", width="small"),
-                            "Match": st.column_config.TextColumn("Match", width="medium"),
-                            "Minute": st.column_config.TextColumn("Minute", width="small"),
-                            "Part": st.column_config.TextColumn("Part", width="small"),
-                            "Event ID": st.column_config.TextColumn("Event ID", width="small"),
-                            "xS": st.column_config.NumberColumn("xS", width="small", format="%.3f"),
-                            "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
-                            "Opponent": st.column_config.TextColumn("Opponent", width="small")
-                        }
-                    )
-                else:
-                    st.info(f"No unsuccessful saves found for {selected_goalkeeper}.")
+                table_data.append({
+                    'Rank': i + 1,
+                    'Player': player_name,
+                    'Team': stats['team'],
+                    'Minutes': f"{stats['minutes_played']:.0f}",
+                    'xG': xg_display,
+                    'PSxG': psxg_display,
+                    'PSxG - xG': psxg_minus_xg_display,
+                    'PBD': pbd_display,
+                    'Goals Prevented': goals_prevented_display,
+                    'PSxG Faced': psxg_faced_display,
+                    'Goals Allowed': goals_allowed_display,
+                    'Shots': shots_display
+                })
+            
+            # Display the table
+            st.dataframe(
+                table_data,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                    "Player": st.column_config.TextColumn("Player", width="medium"),
+                    "Team": st.column_config.TextColumn("Team", width="small"),
+                    "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
+                    "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
+                    "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
+                    "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
+                    "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
+                    "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
+                    "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
+                    "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
+                    "Shots": st.column_config.NumberColumn("Shots", width="small")
+                }
+            )
+        else:
+            if min_minutes > 0:
+                st.info(f"No players found with at least {min_minutes} minutes played.")
             else:
-                st.info("No goalkeepers found in the data.")
+                st.info("No shot data found for player analysis.")
