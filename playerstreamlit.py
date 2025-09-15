@@ -555,7 +555,7 @@ if all_events_data:
                             'Part': f"Part {save['partId']}",
                             'xS': f"{save['xs']:.3f}",
                             'PSxG': f"{1.0 - save['xs']:.3f}",
-                            'Team': save['team']
+                            'Opponent': save['team']
                         })
                     
                     # Display the table
@@ -570,7 +570,7 @@ if all_events_data:
                             "Part": st.column_config.TextColumn("Part", width="small"),
                             "xS": st.column_config.NumberColumn("xS", width="small", format="%.3f"),
                             "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
-                            "Team": st.column_config.TextColumn("Team", width="small")
+                            "Opponent": st.column_config.TextColumn("Opponent", width="small")
                         }
                     )
                 else:
