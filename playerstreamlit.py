@@ -146,29 +146,37 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
-        # Function to find all shots faced by goalkeepers
+        # Function to find all goalkeeper events (saves and goals allowed)
         def find_goalkeeper_events(events):
             gk_events = []
             for event in events:
-                # Check for shots (both on target and off target)
-                is_shot = 'shot' in str(event.get('baseTypeName', '')).lower()
-                event_labels = event.get('labels', []) or []
-                SHOT_LABELS = [128, 143, 144, 142]
-                has_shot_label = any(label in event_labels for label in SHOT_LABELS)
-                
-                if is_shot or has_shot_label:
-                    # Get the goalkeeper who faced this shot
-                    gk_name = event.get('goalkeeperName', 'Unknown')
+                # Check for save events (baseTypeId 12)
+                if event.get('baseTypeId') == 12:  # SAVE
+                    gk_name = event.get('playerName', 'Unknown')
                     if gk_name and gk_name != 'Unknown':
-                        shot_info = {
+                        save_info = {
                             'team': event.get('teamName', 'Unknown'),
                             'goalkeeper': gk_name,
-                            'psxg': event.get('metrics', {}).get('PSxG', 0.0),
-                            'is_goal': event.get('resultId') == 1,  # 1 = GOAL
+                            'xs': event.get('metrics', {}).get('xS', 0.0),
+                            'is_save': True,
                             'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
                             'partId': event.get('partId', 1)
                         }
-                        gk_events.append(shot_info)
+                        gk_events.append(save_info)
+                
+                # Also check for goals (baseTypeId 10) to track goals allowed
+                elif event.get('baseTypeId') == 10:  # GOAL
+                    gk_name = event.get('goalkeeperName', 'Unknown')
+                    if gk_name and gk_name != 'Unknown':
+                        goal_info = {
+                            'team': event.get('teamName', 'Unknown'),
+                            'goalkeeper': gk_name,
+                            'xs': 0.0,
+                            'is_save': False,
+                            'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                            'partId': event.get('partId', 1)
+                        }
+                        gk_events.append(goal_info)
             return gk_events
 
         # Get all shot events, dribble events, and goalkeeper events
@@ -364,11 +372,11 @@ if all_events_data:
                     'minutes_played': total_player_minutes.get(gk_name, 0)
                 }
             
-            # Add PSxG faced
-            player_stats[gk_name]['gk_performance'] += gk_event['psxg']
-            
-            # Subtract goals allowed
-            if gk_event['is_goal']:
+            if gk_event['is_save']:
+                # Add xS (expected saves) - this is 1 - PSxG
+                player_stats[gk_name]['gk_performance'] += gk_event['xs']
+            else:
+                # Subtract goals allowed (each goal is -1)
                 player_stats[gk_name]['gk_performance'] -= 1.0
         
         # Calculate PSxG - xG for each player
@@ -464,7 +472,7 @@ if all_events_data:
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
-                    "GK Performance": st.column_config.NumberColumn("GK Performance", width="small", format="%.2f", help="PSxG faced - Goals allowed"),
+                    "GK Performance": st.column_config.NumberColumn("GK Performance", width="small", format="%.2f", help="Goals prevented (xS from saves - Goals allowed)"),
                     "Shots": st.column_config.NumberColumn("Shots", width="small")
                 }
             )
