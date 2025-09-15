@@ -338,7 +338,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
-                    'gk_performance': 0.0,
+                    'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
@@ -359,7 +359,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
-                    'gk_performance': 0.0,
+                    'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0)
@@ -380,7 +380,7 @@ if all_events_data:
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
-                    'gk_performance': 0.0,
+                    'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(gk_name, 0)
@@ -390,17 +390,17 @@ if all_events_data:
             # PSxG faced = 1 - xS for each save attempt
             player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
             
-            if gk_event['is_save']:
-                # Add xS (expected saves) - this is 1 - PSxG
-                player_stats[gk_name]['gk_performance'] += gk_event['xs']
-            elif gk_event.get('is_unsuccessful_save', False) or gk_event.get('is_goal', False):
+            if gk_event.get('is_unsuccessful_save', False) or gk_event.get('is_goal', False):
                 # Count unsuccessful saves and goals as goals allowed
                 player_stats[gk_name]['goals_allowed'] += 1
-                player_stats[gk_name]['gk_performance'] -= 1.0
         
         # Calculate PSxG - xG for each player
         for player in player_stats:
             player_stats[player]['PSxG_minus_xG'] = player_stats[player]['PSxG'] - player_stats[player]['xG']
+        
+        # Calculate Goals Prevented for goalkeepers (PSxG Faced - Goals Allowed)
+        for player in player_stats:
+            player_stats[player]['goals_prevented'] = player_stats[player]['psxg_faced'] - player_stats[player]['goals_allowed']
         
         # Sort players by xG (descending)
         sorted_players = sorted(player_stats.items(), key=lambda x: x[1]['xG'], reverse=True)
@@ -455,7 +455,7 @@ if all_events_data:
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
                     shots_display = f"{stats['shots'] * multiplier:.1f}"
                     pbd_display = f"{stats['pbd'] * multiplier:.1f}"
-                    gk_performance_display = f"{stats['gk_performance'] * multiplier:.2f}"
+                    goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
                 else:
@@ -464,7 +464,7 @@ if all_events_data:
                     psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
                     shots_display = f"{stats['shots']:.0f}"
                     pbd_display = f"{stats['pbd']:.1f}"
-                    gk_performance_display = f"{stats['gk_performance']:.2f}"
+                    goals_prevented_display = f"{stats['goals_prevented']:.2f}"
                     psxg_faced_display = f"{stats['psxg_faced']:.2f}"
                     goals_allowed_display = f"{stats['goals_allowed']:.0f}"
                 
@@ -477,7 +477,7 @@ if all_events_data:
                     'PSxG': psxg_display,
                     'PSxG - xG': psxg_minus_xg_display,
                     'PBD': pbd_display,
-                    'GK Performance': gk_performance_display,
+                    'Goals Prevented': goals_prevented_display,
                     'PSxG Faced': psxg_faced_display,
                     'Goals Allowed': goals_allowed_display,
                     'Shots': shots_display
@@ -497,7 +497,7 @@ if all_events_data:
                     "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
                     "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
                     "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
-                    "GK Performance": st.column_config.NumberColumn("GK Performance", width="small", format="%.2f", help="Goals prevented (xS from saves - Goals allowed)"),
+                    "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
                     "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
                     "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
                     "Shots": st.column_config.NumberColumn("Shots", width="small")
