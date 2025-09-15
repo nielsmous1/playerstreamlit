@@ -387,7 +387,8 @@ if all_events_data:
                 }
             
             # Add PSxG faced for all save attempts (both successful and unsuccessful)
-            player_stats[gk_name]['psxg_faced'] += gk_event['psxg']
+            # PSxG faced = 1 - xS for each save attempt
+            player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
             
             if gk_event['is_save']:
                 # Add xS (expected saves) - this is 1 - PSxG
