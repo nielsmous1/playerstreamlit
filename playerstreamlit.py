@@ -249,8 +249,19 @@ if all_events_data:
             
             return player_minutes
         
-        # Calculate minutes played for all players
-        player_minutes = calculate_player_minutes(all_events)
+        # Calculate minutes played for all players across all matches
+        total_player_minutes = {}
+        
+        # Process each match separately and sum up minutes
+        for events_data in all_events_data:
+            events = events_data.get('data', []) if isinstance(events_data, dict) else []
+            match_minutes = calculate_player_minutes(events)
+            
+            # Add to total minutes for each player
+            for player_name, minutes in match_minutes.items():
+                if player_name not in total_player_minutes:
+                    total_player_minutes[player_name] = 0
+                total_player_minutes[player_name] += minutes
         
         # Calculate player statistics
         player_stats = {}
@@ -262,7 +273,7 @@ if all_events_data:
                     'xG': 0.0,
                     'PSxG': 0.0,
                     'shots': 0,
-                    'minutes_played': player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0)
                 }
             
             player_stats[player_name]['xG'] += shot['xG']
@@ -307,7 +318,12 @@ if all_events_data:
         # Filter players by minimum minutes
         filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
         
-        st.write(f"Showing top {min(num_players, len(filtered_players))} players by xG (min. {min_minutes} minutes played)")
+        # Display summary
+        st.write(f"**Analysis Summary:**")
+        st.write(f"• {len(all_events_data)} matches analyzed")
+        st.write(f"• {len(total_player_minutes)} total players found")
+        st.write(f"• {len(filtered_players)} players with ≥{min_minutes} minutes played")
+        st.write(f"• Showing top {min(num_players, len(filtered_players))} players by xG")
         
         # Create player table
         if filtered_players:
