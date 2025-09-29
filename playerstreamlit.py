@@ -559,121 +559,222 @@ if all_events_data:
                         if name and name != 'NOT_APPLICABLE' and name != 'Unknown' and name.strip()}
         sorted_players = sorted(valid_players.items(), key=lambda x: x[1]['xG'], reverse=True)
         
-        st.subheader("Player Performance Analysis")
-        
-        # Filters
-        col1, col2, col3 = st.columns([1, 1, 2])
-    
-        with col1:
-            num_players = st.selectbox(
-                "Number of players to show:",
-                options=[10, 20, 50, 100, len(sorted_players)],
-                index=0
-            )
-        
-        with col2:
-            min_minutes = st.slider(
-                "Minimum minutes played:",
-                min_value=0,
-                max_value=500,
-                value=0,
-                step=5
-            )
-        
-        with col3:
-            per_96_minutes = st.checkbox("Show stats per 96 minutes", value=False)
-            if per_96_minutes:
-                st.caption("Stats will be normalized to 96 minutes (full match equivalent)")
-        
-        # Filter players by minimum minutes
-        filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
-        
-        # Display summary
-        st.write(f"**Analysis Summary:**")
-        st.write(f"• {len(all_events_data)} matches analyzed")
-        st.write(f"• {len(total_player_minutes)} total players found")
-        st.write(f"• {len(filtered_players)} players with ≥{min_minutes} minutes played")
-        st.write(f"• Showing top {min(num_players, len(filtered_players))} players by xG")
-        
-        # Create player table
-        if filtered_players:
-            # Prepare data for the table
-            table_data = []
-            for i, (player_name, stats) in enumerate(filtered_players[:num_players]):
-                # Calculate per-96-minutes stats if requested
-                if per_96_minutes and stats['minutes_played'] > 0:
-                    multiplier = 96 / stats['minutes_played']
-                    xg_display = f"{stats['xG'] * multiplier:.3f}"
-                    psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
-                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
-                    shots_display = f"{stats['shots'] * multiplier:.1f}"
-                    pbd_display = f"{stats['pbd'] * multiplier:.1f}"
-                    takeons_display = f"{stats['takeons'] * multiplier:.1f}"
-                    takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
-                    passes_to_box_display = f"{stats['passes_to_box'] * multiplier:.1f}"
-                    counter_pressures_display = f"{stats['counter_pressures'] * multiplier:.1f}"
-                    goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
-                    psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
-                    goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
-                else:
-                    xg_display = f"{stats['xG']:.3f}"
-                    psxg_display = f"{stats['PSxG']:.3f}"
-                    psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
-                    shots_display = f"{stats['shots']:.0f}"
-                    pbd_display = f"{stats['pbd']:.1f}"
-                    takeons_display = f"{stats['takeons']:.0f}"
-                    takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
-                    passes_to_box_display = f"{stats['passes_to_box']:.0f}"
-                    counter_pressures_display = f"{stats['counter_pressures']:.0f}"
-                    goals_prevented_display = f"{stats['goals_prevented']:.2f}"
-                    psxg_faced_display = f"{stats['psxg_faced']:.2f}"
-                    goals_allowed_display = f"{stats['goals_allowed']:.0f}"
-                
-                table_data.append({
-                    'Rank': i + 1,
-                    'Player': player_name,
-                    'Team': stats['team'],
-                    'Minutes': f"{stats['minutes_played']:.0f}",
-                    'xG': xg_display,
-                    'PSxG': psxg_display,
-                    'PSxG - xG': psxg_minus_xg_display,
-                    'PBD': pbd_display,
-                    'Take-ons': takeons_display,
-                    'Take-on %': takeon_success_pct_display,
-                    'Passes to Box': passes_to_box_display,
-                    'Counter Pressures': counter_pressures_display,
-                    'Goals Prevented': goals_prevented_display,
-                    'PSxG Faced': psxg_faced_display,
-                    'Goals Allowed': goals_allowed_display,
-                    'Shots': shots_display
-                })
+        analysis_tab, dashboard_tab = st.tabs(["Analysis", "Dashboard"])
+
+        with analysis_tab:
+            st.subheader("Player Performance Analysis")
             
-            # Display the table
-            st.dataframe(
-                table_data,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Rank": st.column_config.NumberColumn("Rank", width="small"),
-                    "Player": st.column_config.TextColumn("Player", width="medium"),
-                    "Team": st.column_config.TextColumn("Team", width="small"),
-                    "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
-                    "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
-                    "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
-                    "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
-                    "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
-                    "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
-                    "Take-on %": st.column_config.TextColumn("Take-on %", width="small", help="Take-on success percentage"),
-                    "Passes to Box": st.column_config.NumberColumn("Passes to Box", width="small", format="%.0f", help="Successful passes to box (label 72)"),
-                    "Counter Pressures": st.column_config.NumberColumn("Counter Pressures", width="small", format="%.0f", help="Counter pressure actions (label 215)"),
-                    "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
-                    "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
-                    "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
-                    "Shots": st.column_config.NumberColumn("Shots", width="small")
-                }
-            )
-        else:
-            if min_minutes > 0:
-                st.info(f"No players found with at least {min_minutes} minutes played.")
+            # Filters
+            col1, col2, col3 = st.columns([1, 1, 2])
+            
+            with col1:
+                num_players = st.selectbox(
+                    "Number of players to show:",
+                    options=[10, 20, 50, 100, len(sorted_players)],
+                    index=0
+                )
+            
+            with col2:
+                min_minutes = st.slider(
+                    "Minimum minutes played:",
+                    min_value=0,
+                    max_value=500,
+                    value=0,
+                    step=5
+                )
+            
+            with col3:
+                per_96_minutes = st.checkbox("Show stats per 96 minutes", value=False)
+                if per_96_minutes:
+                    st.caption("Stats will be normalized to 96 minutes (full match equivalent)")
+            
+            # Filter players by minimum minutes
+            filtered_players = [(name, stats) for name, stats in sorted_players if stats['minutes_played'] >= min_minutes]
+            
+            # Display summary
+            st.write(f"**Analysis Summary:**")
+            st.write(f"• {len(all_events_data)} matches analyzed")
+            st.write(f"• {len(total_player_minutes)} total players found")
+            st.write(f"• {len(filtered_players)} players with ≥{min_minutes} minutes played")
+            st.write(f"• Showing top {min(num_players, len(filtered_players))} players by xG")
+            
+            # Create player table
+            if filtered_players:
+                # Prepare data for the table
+                table_data = []
+                for i, (player_name, stats) in enumerate(filtered_players[:num_players]):
+                    # Calculate per-96-minutes stats if requested
+                    if per_96_minutes and stats['minutes_played'] > 0:
+                        multiplier = 96 / stats['minutes_played']
+                        xg_display = f"{stats['xG'] * multiplier:.3f}"
+                        psxg_display = f"{stats['PSxG'] * multiplier:.3f}"
+                        psxg_minus_xg_display = f"{stats['PSxG_minus_xG'] * multiplier:.3f}"
+                        shots_display = f"{stats['shots'] * multiplier:.1f}"
+                        pbd_display = f"{stats['pbd'] * multiplier:.1f}"
+                        takeons_display = f"{stats['takeons'] * multiplier:.1f}"
+                        takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
+                        passes_to_box_display = f"{stats['passes_to_box'] * multiplier:.1f}"
+                        counter_pressures_display = f"{stats['counter_pressures'] * multiplier:.1f}"
+                        goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
+                        psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
+                        goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
+                    else:
+                        xg_display = f"{stats['xG']:.3f}"
+                        psxg_display = f"{stats['PSxG']:.3f}"
+                        psxg_minus_xg_display = f"{stats['PSxG_minus_xG']:.3f}"
+                        shots_display = f"{stats['shots']:.0f}"
+                        pbd_display = f"{stats['pbd']:.1f}"
+                        takeons_display = f"{stats['takeons']:.0f}"
+                        takeon_success_pct_display = f"{stats['takeon_success_pct']:.1f}%"
+                        passes_to_box_display = f"{stats['passes_to_box']:.0f}"
+                        counter_pressures_display = f"{stats['counter_pressures']:.0f}"
+                        goals_prevented_display = f"{stats['goals_prevented']:.2f}"
+                        psxg_faced_display = f"{stats['psxg_faced']:.2f}"
+                        goals_allowed_display = f"{stats['goals_allowed']:.0f}"
+                    
+                    table_data.append({
+                        'Rank': i + 1,
+                        'Player': player_name,
+                        'Team': stats['team'],
+                        'Minutes': f"{stats['minutes_played']:.0f}",
+                        'xG': xg_display,
+                        'PSxG': psxg_display,
+                        'PSxG - xG': psxg_minus_xg_display,
+                        'PBD': pbd_display,
+                        'Take-ons': takeons_display,
+                        'Take-on %': takeon_success_pct_display,
+                        'Passes to Box': passes_to_box_display,
+                        'Counter Pressures': counter_pressures_display,
+                        'Goals Prevented': goals_prevented_display,
+                        'PSxG Faced': psxg_faced_display,
+                        'Goals Allowed': goals_allowed_display,
+                        'Shots': shots_display
+                    })
+                
+                # Display the table
+                st.dataframe(
+                    table_data,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                        "Player": st.column_config.TextColumn("Player", width="medium"),
+                        "Team": st.column_config.TextColumn("Team", width="small"),
+                        "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
+                        "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
+                        "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
+                        "PSxG - xG": st.column_config.NumberColumn("PSxG - xG", width="small", format="%.3f"),
+                        "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
+                        "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
+                        "Take-on %": st.column_config.TextColumn("Take-on %", width="small", help="Take-on success percentage"),
+                        "Passes to Box": st.column_config.NumberColumn("Passes to Box", width="small", format="%.0f", help="Successful passes to box (label 72)"),
+                        "Counter Pressures": st.column_config.NumberColumn("Counter Pressures", width="small", format="%.0f", help="Counter pressure actions (label 215)"),
+                        "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
+                        "PSxG Faced": st.column_config.NumberColumn("PSxG Faced", width="small", format="%.2f", help="Total PSxG faced by goalkeeper"),
+                        "Goals Allowed": st.column_config.NumberColumn("Goals Allowed", width="small", format="%.0f", help="Total goals allowed (unsuccessful saves)"),
+                        "Shots": st.column_config.NumberColumn("Shots", width="small")
+                    }
+                )
             else:
-                st.info("No shot data found for player analysis.")
+                if min_minutes > 0:
+                    st.info(f"No players found with at least {min_minutes} minutes played.")
+                else:
+                    st.info("No shot data found for player analysis.")
+
+        with dashboard_tab:
+            st.subheader("Dashboard")
+            dashboard_cols = st.columns([2, 2, 3])
+
+            # Player selector
+            with dashboard_cols[0]:
+                player_options = sorted(list(valid_players.keys()))
+                selected_player = st.selectbox("Select player", options=player_options)
+
+            # Show standard info
+            if selected_player:
+                stats = valid_players[selected_player]
+                with dashboard_cols[1]:
+                    st.metric("Team", stats['team'])
+                    st.metric("Minutes Played", f"{stats['minutes_played']:.0f}")
+
+            # Radar chart controls
+            with dashboard_cols[2]:
+                st.markdown("**Radar Chart Settings**")
+                available_metrics = {
+                    'xG': 'xG',
+                    'PSxG': 'PSxG',
+                    'PSxG - xG': 'PSxG_minus_xG',
+                    'Shots': 'shots',
+                    'PBD (m)': 'pbd',
+                    'Take-ons': 'takeons',
+                    'Take-on %': 'takeon_success_pct',
+                    'Passes to Box': 'passes_to_box',
+                    'Counter Pressures': 'counter_pressures',
+                    'Goals Prevented': 'goals_prevented',
+                    'PSxG Faced': 'psxg_faced',
+                    'Goals Allowed': 'goals_allowed'
+                }
+                default_selection = ['xG', 'Shots', 'PBD (m)', 'Take-ons', 'Passes to Box']
+                selected_labels = st.multiselect(
+                    "Select statistics",
+                    options=list(available_metrics.keys()),
+                    default=[m for m in default_selection if m in available_metrics]
+                )
+                per96 = st.checkbox("Per 96 minutes", value=False, help="Normalize selected player's stats to 96 minutes")
+                normalize = st.checkbox("Normalize 0-1 across players", value=True, help="Scale each metric by the max across all players")
+
+            # Build and show radar chart
+            if selected_player and selected_labels:
+                chosen_keys = [available_metrics[label] for label in selected_labels]
+
+                # Prepare vectors
+                def get_value(pstats, key):
+                    value = pstats.get(key, 0.0)
+                    if per96:
+                        minutes = max(pstats.get('minutes_played', 0), 1e-9)
+                        value = value * (96.0 / minutes) if minutes > 0 else 0.0
+                    return float(value)
+
+                selected_stats = valid_players[selected_player]
+                player_values = [get_value(selected_stats, k) for k in chosen_keys]
+
+                # Normalization by field max
+                if normalize:
+                    max_values = []
+                    for key in chosen_keys:
+                        vals = []
+                        for _, p in valid_players.items():
+                            v = get_value(p, key)
+                            vals.append(abs(v) if key in ['PSxG_minus_xG'] else v)
+                        max_v = max(vals) if vals else 1.0
+                        if max_v == 0:
+                            max_v = 1.0
+                        max_values.append(max_v)
+                    norm_values = []
+                    for v, m, k in zip(player_values, max_values, chosen_keys):
+                        value = abs(v) if k in ['PSxG_minus_xG'] else v
+                        norm_values.append(value / m if m else 0.0)
+                    plot_values = norm_values
+                    r_label_suffix = " (0-1)"
+                
+                else:
+                    plot_values = player_values
+                    r_label_suffix = ""
+
+                # Radar plot
+                num_vars = len(plot_values)
+                angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+                plot_values += plot_values[:1]
+                angles += angles[:1]
+
+                fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6, 6))
+                ax.plot(angles, plot_values, color="#1f77b4", linewidth=2)
+                ax.fill(angles, plot_values, color="#1f77b4", alpha=0.2)
+                ax.set_theta_offset(np.pi / 2)
+                ax.set_theta_direction(-1)
+                ax.set_rlabel_position(0)
+                tick_labels = [f"{label}" for label in selected_labels]
+                ax.set_xticks(angles[:-1])
+                ax.set_xticklabels(tick_labels)
+                ax.set_title(f"{selected_player} - Radar{r_label_suffix}")
+                st.pyplot(fig, use_container_width=True)
