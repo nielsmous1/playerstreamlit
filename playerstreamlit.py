@@ -720,8 +720,8 @@ if all_events_data:
                     options=list(available_metrics.keys()),
                     default=[m for m in default_selection if m in available_metrics]
                 )
-                per96 = st.checkbox("Per 96 minutes", value=False, help="Normalize selected player's stats to 96 minutes")
-                normalize = st.checkbox("Normalize 0-1 across players", value=True, help="Scale each metric by the max across all players")
+                per96 = st.checkbox("Per 96 minutes", value=False, help="Normalize stats to 96 minutes")
+                normalize_percentile = st.checkbox("Percentile (0–100)", value=True, help="Convert metrics to percentile ranks across all players")
 
             # Build and show charts
             if selected_player and selected_labels:
@@ -736,35 +736,36 @@ if all_events_data:
                     return float(value)
 
                 selected_stats = valid_players[selected_player]
-                player_values = [get_value(selected_stats, k) for k in chosen_keys]
+                player_values_raw = [get_value(selected_stats, k) for k in chosen_keys]
 
-                # Normalization by field max (shared for both charts)
-                if normalize:
-                    max_values = []
-                    for key in chosen_keys:
-                        vals = []
-                        for _, p in valid_players.items():
-                            v = get_value(p, key)
-                            vals.append(abs(v) if key in ['PSxG_minus_xG'] else v)
-                        max_v = max(vals) if vals else 1.0
-                        if max_v == 0:
-                            max_v = 1.0
-                        max_values.append(max_v)
-                    norm_values = []
-                    for v, m, k in zip(player_values, max_values, chosen_keys):
-                        value = abs(v) if k in ['PSxG_minus_xG'] else v
-                        norm_values.append(value / m if m else 0.0)
-                    radar_values = norm_values
-                    radar_suffix = " (0-1)"
+                # Percentile normalization helper
+                def percentile_rank(values_list, target_value):
+                    if not values_list:
+                        return 0.0
+                    # Handle metrics that can be negative by using raw value
+                    less_equal = sum(1 for v in values_list if v <= target_value)
+                    return 100.0 * less_equal / len(values_list)
+
+                # Precompute raw distributions per metric
+                distributions = {}
+                for key in chosen_keys:
+                    vals = []
+                    for _, p in valid_players.items():
+                        vals.append(get_value(p, key))
+                    distributions[key] = vals
+
+                if normalize_percentile:
+                    radar_values = [percentile_rank(distributions[k], v) for k, v in zip(chosen_keys, player_values_raw)]
+                    radar_suffix = " (percentile)"
                 else:
-                    radar_values = player_values
+                    radar_values = player_values_raw
                     radar_suffix = ""
 
                 plot_cols = st.columns([3, 4])
 
                 # Left: horizontal bar with all players' dots per metric
                 with plot_cols[0]:
-                    fig_h, ax_h = plt.subplots(figsize=(7, 6 + max(0, len(chosen_keys) - 5) * 0.4))
+                    fig_h, ax_h = plt.subplots(figsize=(8, 6 + max(0, len(chosen_keys) - 5) * 0.4))
                     metrics_display = list(reversed(selected_labels))
                     keys_display = list(reversed(chosen_keys))
                     y_positions = np.arange(len(keys_display))
@@ -773,64 +774,60 @@ if all_events_data:
                     big3_teams = {"PSV", "Ajax", "Feyenoord"}
                     for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
                         # All players' values for this metric
+                        values_raw = distributions[key]
                         values_all = []
-                        values_all_for_max = []
-                        big3_values = []
+                        big3_values_raw = []
                         for name, p in valid_players.items():
                             v = get_value(p, key)
-                            # For normalization mirroring
-                            if normalize:
-                                m = max_values[len(chosen_keys) - 1 - idx]  # reversed index
-                                vv = (abs(v) if key in ['PSxG_minus_xG'] else v) / m if m else 0.0
-                            else:
-                                vv = v
+                            vv = percentile_rank(values_raw, v) if normalize_percentile else v
                             values_all.append(vv)
-                            values_all_for_max.append(vv)
                             team_name = str(p.get('team', '') or '')
                             if any(t.lower() in team_name.lower() for t in big3_teams):
-                                big3_values.append(vv)
+                                big3_values_raw.append(v)
 
                         # Scales
-                        if normalize:
-                            xmax = 1.0
+                        if normalize_percentile:
+                            xmax = 100.0
                         else:
-                            xmax = max(values_all_for_max) if values_all_for_max else 1.0
+                            xmax = max(values_raw) if values_raw else 1.0
                             if xmax == 0:
                                 xmax = 1.0
 
                         y = y_positions[idx]
                         # Background bar
-                        ax_h.barh(y, xmax, color="#f0f0f0", edgecolor="none", height=0.6, zorder=1)
+                        ax_h.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
 
                         # All players small grey dots
-                        ax_h.scatter(values_all, np.full(len(values_all), y), s=12, color="#777777", alpha=0.7, zorder=2)
+                        jitter = (np.random.rand(len(values_all)) - 0.5) * 0.15
+                        ax_h.scatter(values_all, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
 
                         # Selected player value
                         sel_v_raw = get_value(selected_stats, key)
-                        if normalize:
-                            msel = max_values[len(chosen_keys) - 1 - idx]
-                            sel_v = (abs(sel_v_raw) if key in ['PSxG_minus_xG'] else sel_v_raw) / msel if msel else 0.0
-                        else:
-                            sel_v = sel_v_raw
-                        ax_h.scatter([sel_v], [y], s=50, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3, label="Selected player" if idx == 0 else None)
+                        sel_v = percentile_rank(values_raw, sel_v_raw) if normalize_percentile else sel_v_raw
+                        ax_h.scatter([sel_v], [y], s=70, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3, label="Selected player" if idx == 0 else None)
 
                         # Averages
-                        if values_all:
-                            avg = float(np.mean(values_all))
-                            ax_h.axvline(avg, linestyle=(0, (4, 4)), color="#333333", linewidth=1.2, zorder=1, label="Average" if idx == 0 else None)
-                        if big3_values:
-                            avg_big3 = float(np.mean(big3_values))
-                            ax_h.axvline(avg_big3, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.2, zorder=1, label="Top 3 (PSV/Ajax/Fey)" if idx == 0 else None)
+                        if values_raw:
+                            avg_raw = float(np.mean(values_raw))
+                            avg_pct = percentile_rank(values_raw, avg_raw) if normalize_percentile else avg_raw
+                            ax_h.vlines(avg_pct, y - 0.28, y + 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1, label="Average" if idx == 0 else None)
+                        if big3_values_raw:
+                            avg_big3_raw = float(np.mean(big3_values_raw))
+                            avg_big3_pct = percentile_rank(values_raw, avg_big3_raw) if normalize_percentile else avg_big3_raw
+                            ax_h.vlines(avg_big3_pct, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1, label="Top 3 (PSV/Ajax/Fey)" if idx == 0 else None)
 
                     ax_h.set_yticks(y_positions)
                     ax_h.set_yticklabels(metrics_display)
-                    ax_h.set_xlim(left=0)
+                    ax_h.set_xlim(left=0, right=xmax)
                     ax_h.invert_yaxis()
-                    ax_h.set_xlabel("Per 96" if per96 else "Raw value")
-                    ax_h.set_title("Distribution by metric" + (" (0-1)" if normalize else ""))
+                    ax_h.set_xlabel("Percentile (0–100)" if normalize_percentile else ("Per 96" if per96 else "Raw value"))
+                    ax_h.set_title("Distribution by metric" + (" (percentile)" if normalize_percentile else ""))
+                    ax_h.grid(axis='x', alpha=0.15)
+                    for spine in ["top", "right", "left", "bottom"]:
+                        ax_h.spines[spine].set_visible(False)
                     handles, labels_ = ax_h.get_legend_handles_labels()
                     if handles:
-                        ax_h.legend(loc="lower right")
+                        ax_h.legend(loc="lower right", frameon=False)
                     st.pyplot(fig_h, use_container_width=True)
 
                 # Right: Radar plot
@@ -840,14 +837,19 @@ if all_events_data:
                     radar_plot_values = radar_values + radar_values[:1]
                     angles_plot = angles + angles[:1]
 
-                    fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6, 6))
-                    ax.plot(angles_plot, radar_plot_values, color="#1f77b4", linewidth=2)
-                    ax.fill(angles_plot, radar_plot_values, color="#1f77b4", alpha=0.2)
+                    fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6.5, 6.5))
+                    ax.plot(angles_plot, radar_plot_values, color="#1f77b4", linewidth=2.5)
+                    ax.fill(angles_plot, radar_plot_values, color="#1f77b4", alpha=0.25)
                     ax.set_theta_offset(np.pi / 2)
                     ax.set_theta_direction(-1)
                     ax.set_rlabel_position(0)
                     tick_labels = [f"{label}" for label in selected_labels]
                     ax.set_xticks(angles)
                     ax.set_xticklabels(tick_labels)
+                    if normalize_percentile:
+                        ax.set_ylim(0, 100)
+                        ax.set_yticks([20, 40, 60, 80, 100])
+                        ax.set_yticklabels(["20", "40", "60", "80", "100"]) 
+                    ax.grid(alpha=0.2)
                     ax.set_title(f"{selected_player} - Radar{radar_suffix}")
                     st.pyplot(fig, use_container_width=True)
