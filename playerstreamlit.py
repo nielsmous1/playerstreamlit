@@ -148,6 +148,21 @@ if all_events_data:
                     dribble_events.append(dribble_info)
             return dribble_events
 
+        # Function to find progressive carry events (carry events with label 119)
+        def find_progressive_carry_events(events):
+            prog_carry_events = []
+            for event in events:
+                if event.get('baseTypeId') == 3 and event.get('subTypeId') == 300:
+                    labels = event.get('labels', []) or []
+                    if 119 in labels:
+                        prog_carry_events.append({
+                            'team': event.get('teamName', 'Unknown'),
+                            'player': event.get('playerName', 'Unknown'),
+                            'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                            'partId': event.get('partId', 1)
+                        })
+            return prog_carry_events
+
         # Function to find all take-on events (both successful and unsuccessful)
         def find_takeon_events(events):
             takeon_events = []
@@ -229,6 +244,7 @@ if all_events_data:
         # Get all shot events, dribble events, take-on events, passes to box, counter pressures, and goalkeeper events
         all_shots = find_shot_events(all_events)
         all_dribbles = find_dribble_events(all_events)
+        all_progressive_carries = find_progressive_carry_events(all_events)
         all_takeons = find_takeon_events(all_events)
         all_passes_to_box = find_passes_to_box_events(all_events)
         all_counter_pressures = find_counter_pressure_events(all_events)
@@ -562,6 +578,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -591,6 +608,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -620,6 +638,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -651,6 +670,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -678,6 +698,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -705,6 +726,7 @@ if all_events_data:
                     'takeons_total': 0,
                     'passes_to_box': 0,
                     'counter_pressures': 0,
+                    'progressive_carries': 0,
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
@@ -714,6 +736,32 @@ if all_events_data:
                     'secondary_positions': position_minutes_summary.get(gk_name, {}).get('secondary_positions', ''),
                     'secondary_positions_minutes': position_minutes_summary.get(gk_name, {}).get('secondary_minutes', 0.0)
                 }
+
+        # Process progressive carries
+        for pc in all_progressive_carries:
+            player_name = pc['player']
+            if player_name not in player_stats:
+                player_stats[player_name] = {
+                    'team': pc['team'],
+                    'xG': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'counter_pressures': 0,
+                    'progressive_carries': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[player_name]['progressive_carries'] += 1
 
         # Ensure all players present in stats have position-minute summaries (in case created before summaries)
         for pname, stats in player_stats.items():
@@ -821,6 +869,7 @@ if all_events_data:
                         goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
                         psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
                         goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
+                        progressive_carries_display = f"{stats.get('progressive_carries', 0) * multiplier:.1f}"
                     else:
                         xg_display = f"{stats['xG']:.3f}"
                         psxg_display = f"{stats['PSxG']:.3f}"
@@ -834,15 +883,13 @@ if all_events_data:
                         goals_prevented_display = f"{stats['goals_prevented']:.2f}"
                         psxg_faced_display = f"{stats['psxg_faced']:.2f}"
                         goals_allowed_display = f"{stats['goals_allowed']:.0f}"
+                        progressive_carries_display = f"{stats.get('progressive_carries', 0):.0f}"
                     
                     table_data.append({
                         'Rank': i + 1,
                         'Player': player_name,
                         'Team': stats['team'],
                         'Position': stats.get('position', 'N/A'),
-                        'Primary Pos Minutes': f"{stats.get('primary_position_minutes', 0.0):.0f}",
-                        '2nd/3rd Positions': stats.get('secondary_positions', ''),
-                        '2nd+3rd Minutes': f"{stats.get('secondary_positions_minutes', 0.0):.0f}",
                         'Minutes': f"{stats['minutes_played']:.0f}",
                         'xG': xg_display,
                         'PSxG': psxg_display,
@@ -850,6 +897,7 @@ if all_events_data:
                         'PBD': pbd_display,
                         'Take-ons': takeons_display,
                         'Take-on %': takeon_success_pct_display,
+                        'Progressive Carries': progressive_carries_display,
                         'Passes to Box': passes_to_box_display,
                         'Counter Pressures': counter_pressures_display,
                         'Goals Prevented': goals_prevented_display,
@@ -867,10 +915,7 @@ if all_events_data:
                         "Rank": st.column_config.NumberColumn("Rank", width="small"),
                         "Player": st.column_config.TextColumn("Player", width="medium"),
                         "Team": st.column_config.TextColumn("Team", width="small"),
-                            "Position": st.column_config.TextColumn("Position", width="small"),
-                            "Primary Pos Minutes": st.column_config.NumberColumn("Primary Pos Minutes", width="small"),
-                            "2nd/3rd Positions": st.column_config.TextColumn("2nd/3rd Positions", width="small"),
-                            "2nd+3rd Minutes": st.column_config.NumberColumn("2nd+3rd Minutes", width="small"),
+                        "Position": st.column_config.TextColumn("Position", width="small"),
                         "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
                         "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
                         "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
@@ -878,6 +923,7 @@ if all_events_data:
                         "PBD": st.column_config.NumberColumn("PBD", width="small", format="%.1f", help="Progression By Dribble (meters)"),
                         "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
                         "Take-on %": st.column_config.TextColumn("Take-on %", width="small", help="Take-on success percentage"),
+                        "Progressive Carries": st.column_config.NumberColumn("Progressive Carries", width="small"),
                         "Passes to Box": st.column_config.NumberColumn("Passes to Box", width="small", format="%.0f", help="Successful passes to box (label 72)"),
                         "Counter Pressures": st.column_config.NumberColumn("Counter Pressures", width="small", format="%.0f", help="Counter pressure actions (label 215)"),
                         "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
