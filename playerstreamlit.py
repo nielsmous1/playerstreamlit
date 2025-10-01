@@ -371,20 +371,27 @@ if all_events_data:
             PLAYER_DETAILED_POSITION_SUBTYPE = 1800
             PLAYER_POSITION_CHANGE_SUBTYPE = 1801
             PERIOD_END_BASE_TYPE = 14
+            PERIOD_START_SUBTYPE = 1400
             PERIOD_END_SUBTYPE = 1401
+            SUBSTITUTION_BASE_TYPE = 16
+            SUB_OUT_SUBTYPE = 1600
+            SUB_IN_SUBTYPE = 1601
 
             player_position_durations_ms = defaultdict(lambda: defaultdict(int))
 
             for events_data in all_matches_events:
                 events = events_data.get('data', []) if isinstance(events_data, dict) else []
-                # Keep only position updates and period end markers
+                # Keep only position updates, period start/end markers, and substitutions
                 position_and_period_events = [
                     e for e in events
                     if (e.get('baseTypeId') == POSITION_BASE_TYPE and e.get('subTypeId') in (PLAYER_DETAILED_POSITION_SUBTYPE, PLAYER_POSITION_CHANGE_SUBTYPE))
-                    or (e.get('baseTypeId') == PERIOD_END_BASE_TYPE and e.get('subTypeId') == PERIOD_END_SUBTYPE)
+                    or (e.get('baseTypeId') == PERIOD_END_BASE_TYPE and e.get('subTypeId') in (PERIOD_START_SUBTYPE, PERIOD_END_SUBTYPE))
+                    or (e.get('baseTypeId') == SUBSTITUTION_BASE_TYPE and e.get('subTypeId') in (SUB_OUT_SUBTYPE, SUB_IN_SUBTYPE))
                 ]
                 position_and_period_events.sort(key=lambda x: x.get('startTimeMs', 0) or 0)
 
+                # Map of player -> { 'position_name': str, 'start_time': int or None }
+                # start_time None means carried over across period boundary awaiting next period start
                 current_player_position = {}
 
                 for e in position_and_period_events:
@@ -399,29 +406,52 @@ if all_events_data:
                         if player_name and player_name != 'NOT_APPLICABLE' and player_name != 'Unknown' and player_name.strip() and position_type_name and position_type_name != 'UNKNOWN':
                             if player_name in current_player_position:
                                 prev = current_player_position[player_name]
-                                duration = event_time_ms - prev['start_time']
-                                if duration > 0:
-                                    player_position_durations_ms[player_name][prev['position_name']] += duration
+                                # Only add if stint was active
+                                if prev.get('start_time') is not None:
+                                    duration = event_time_ms - prev['start_time']
+                                    if duration > 0:
+                                        player_position_durations_ms[player_name][prev['position_name']] += duration
                             current_player_position[player_name] = {
                                 'position_name': position_type_name,
                                 'start_time': event_time_ms
                             }
 
-                    # Close all open stints at period end
+                    # Period start: resume stints for players carried over (start_time is None)
+                    if base_type_id == PERIOD_END_BASE_TYPE and sub_type_id == PERIOD_START_SUBTYPE:
+                        for pname, pos_info in current_player_position.items():
+                            if pos_info.get('start_time') is None:
+                                pos_info['start_time'] = event_time_ms
+
+                    # Period end: close all active stints, but carry positions to next period (start_time becomes None)
                     if base_type_id == PERIOD_END_BASE_TYPE and sub_type_id == PERIOD_END_SUBTYPE:
-                        for pname, pos_info in list(current_player_position.items()):
-                            duration = event_time_ms - pos_info['start_time']
-                            if duration > 0:
-                                player_position_durations_ms[pname][pos_info['position_name']] += duration
-                            del current_player_position[pname]
+                        for pname, pos_info in current_player_position.items():
+                            if pos_info.get('start_time') is not None:
+                                duration = event_time_ms - pos_info['start_time']
+                                if duration > 0:
+                                    player_position_durations_ms[pname][pos_info['position_name']] += duration
+                                # Mark as carried over across break
+                                pos_info['start_time'] = None
+
+                    # Substitutions: close stint on sub out; ignore sub in until position event occurs
+                    if base_type_id == SUBSTITUTION_BASE_TYPE and sub_type_id == SUB_OUT_SUBTYPE:
+                        player_name = e.get('playerName')
+                        if player_name and player_name in current_player_position:
+                            pos_info = current_player_position[player_name]
+                            if pos_info.get('start_time') is not None:
+                                duration = event_time_ms - pos_info['start_time']
+                                if duration > 0:
+                                    player_position_durations_ms[player_name][pos_info['position_name']] += duration
+                            # Remove player from field
+                            del current_player_position[player_name]
 
                 # Close any remaining open stints at the final event time in this match
                 if position_and_period_events:
                     final_event_time_ms = position_and_period_events[-1].get('startTimeMs', 0) or 0
                     for pname, pos_info in list(current_player_position.items()):
-                        duration = final_event_time_ms - pos_info['start_time']
-                        if duration > 0:
-                            player_position_durations_ms[pname][pos_info['position_name']] += duration
+                        if pos_info.get('start_time') is not None:
+                            duration = final_event_time_ms - pos_info['start_time']
+                            if duration > 0:
+                                player_position_durations_ms[pname][pos_info['position_name']] += duration
                     current_player_position.clear()
 
             # Determine primary (most-played) position for each player
