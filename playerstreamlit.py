@@ -7,6 +7,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.patches import Rectangle
 import os
 from pathlib import Path
+from collections import defaultdict
 
 # Page config
 st.set_page_config(page_title="Player Performance Analysis", layout="wide")
@@ -361,6 +362,78 @@ if all_events_data:
             
             return player_minutes
         
+        # Calculate players' primary positions across the entire season
+        def calculate_primary_positions_across_matches(all_matches_events):
+            """Aggregate position durations per player name across all matches and return primary position per player.
+            Uses POSITION events (baseTypeId 18 with subTypeId 1800/1801) and closes stints on period end events (baseTypeId 14, subTypeId 1401).
+            """
+            POSITION_BASE_TYPE = 18
+            PLAYER_DETAILED_POSITION_SUBTYPE = 1800
+            PLAYER_POSITION_CHANGE_SUBTYPE = 1801
+            PERIOD_END_BASE_TYPE = 14
+            PERIOD_END_SUBTYPE = 1401
+
+            player_position_durations_ms = defaultdict(lambda: defaultdict(int))
+
+            for events_data in all_matches_events:
+                events = events_data.get('data', []) if isinstance(events_data, dict) else []
+                # Keep only position updates and period end markers
+                position_and_period_events = [
+                    e for e in events
+                    if (e.get('baseTypeId') == POSITION_BASE_TYPE and e.get('subTypeId') in (PLAYER_DETAILED_POSITION_SUBTYPE, PLAYER_POSITION_CHANGE_SUBTYPE))
+                    or (e.get('baseTypeId') == PERIOD_END_BASE_TYPE and e.get('subTypeId') == PERIOD_END_SUBTYPE)
+                ]
+                position_and_period_events.sort(key=lambda x: x.get('startTimeMs', 0) or 0)
+
+                current_player_position = {}
+
+                for e in position_and_period_events:
+                    event_time_ms = e.get('startTimeMs', 0) or 0
+                    base_type_id = e.get('baseTypeId')
+                    sub_type_id = e.get('subTypeId')
+
+                    # Handle position updates
+                    if base_type_id == POSITION_BASE_TYPE and sub_type_id in (PLAYER_DETAILED_POSITION_SUBTYPE, PLAYER_POSITION_CHANGE_SUBTYPE):
+                        player_name = e.get('playerName')
+                        position_type_name = e.get('positionTypeName')
+                        if player_name and player_name != 'NOT_APPLICABLE' and player_name != 'Unknown' and player_name.strip() and position_type_name and position_type_name != 'UNKNOWN':
+                            if player_name in current_player_position:
+                                prev = current_player_position[player_name]
+                                duration = event_time_ms - prev['start_time']
+                                if duration > 0:
+                                    player_position_durations_ms[player_name][prev['position_name']] += duration
+                            current_player_position[player_name] = {
+                                'position_name': position_type_name,
+                                'start_time': event_time_ms
+                            }
+
+                    # Close all open stints at period end
+                    if base_type_id == PERIOD_END_BASE_TYPE and sub_type_id == PERIOD_END_SUBTYPE:
+                        for pname, pos_info in list(current_player_position.items()):
+                            duration = event_time_ms - pos_info['start_time']
+                            if duration > 0:
+                                player_position_durations_ms[pname][pos_info['position_name']] += duration
+                            del current_player_position[pname]
+
+                # Close any remaining open stints at the final event time in this match
+                if position_and_period_events:
+                    final_event_time_ms = position_and_period_events[-1].get('startTimeMs', 0) or 0
+                    for pname, pos_info in list(current_player_position.items()):
+                        duration = final_event_time_ms - pos_info['start_time']
+                        if duration > 0:
+                            player_position_durations_ms[pname][pos_info['position_name']] += duration
+                    current_player_position.clear()
+
+            # Determine primary (most-played) position for each player
+            primary_position_by_player = {}
+            for pname, pos_map in player_position_durations_ms.items():
+                if pos_map:
+                    primary_position_by_player[pname] = max(pos_map.items(), key=lambda kv: kv[1])[0]
+                else:
+                    primary_position_by_player[pname] = 'N/A'
+
+            return primary_position_by_player, player_position_durations_ms
+
         # Calculate minutes played for all players across all matches
         total_player_minutes = {}
         
@@ -377,6 +450,9 @@ if all_events_data:
         
         # Calculate player statistics
         player_stats = {}
+
+        # Pre-compute primary positions across the whole season
+        primary_positions_by_player, _position_duration_ms = calculate_primary_positions_across_matches(all_events_data)
         
         # Process shots
         for shot in all_shots:
@@ -395,7 +471,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A')
                 }
             
             player_stats[player_name]['xG'] += shot['xG']
@@ -420,7 +497,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A')
                 }
             
             # Add goal progression (negative means closer to goal, so we add the negative value)
@@ -445,7 +523,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A')
                 }
             
             # Count total take-ons
@@ -472,7 +551,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A')
                 }
             
             # Count successful passes to box
@@ -495,7 +575,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(player_name, 0)
+                    'minutes_played': total_player_minutes.get(player_name, 0),
+                    'position': primary_positions_by_player.get(player_name, 'N/A')
                 }
             
             # Count counter pressures
@@ -518,7 +599,8 @@ if all_events_data:
                     'goals_prevented': 0.0,
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
-                    'minutes_played': total_player_minutes.get(gk_name, 0)
+                    'minutes_played': total_player_minutes.get(gk_name, 0),
+                    'position': primary_positions_by_player.get(gk_name, 'N/A')
                 }
             
             # Add PSxG faced for all save attempts (both successful and unsuccessful)
@@ -636,6 +718,7 @@ if all_events_data:
                         'Rank': i + 1,
                         'Player': player_name,
                         'Team': stats['team'],
+                        'Position': stats.get('position', 'N/A'),
                         'Minutes': f"{stats['minutes_played']:.0f}",
                         'xG': xg_display,
                         'PSxG': psxg_display,
@@ -660,6 +743,7 @@ if all_events_data:
                         "Rank": st.column_config.NumberColumn("Rank", width="small"),
                         "Player": st.column_config.TextColumn("Player", width="medium"),
                         "Team": st.column_config.TextColumn("Team", width="small"),
+                            "Position": st.column_config.TextColumn("Position", width="small"),
                         "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
                         "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
                         "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
@@ -696,6 +780,7 @@ if all_events_data:
                 with dashboard_cols[1]:
                     st.metric("Team", stats['team'])
                     st.metric("Minutes Played", f"{stats['minutes_played']:.0f}")
+                    st.metric("Primary Position", stats.get('position', 'N/A'))
 
             # Radar chart controls
             with dashboard_cols[2]:
