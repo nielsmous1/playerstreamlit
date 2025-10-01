@@ -272,6 +272,48 @@ if all_events_data:
         all_counter_pressures = find_counter_pressure_events(all_events)
         all_gk_events = find_goalkeeper_events(all_events)
         
+        # Additional label-based event collections
+        def find_successful_label_events(events, label_set):
+            found = []
+            for event in events:
+                if event.get('resultId') == 1:
+                    labels = event.get('labels', []) or []
+                    if any(l in labels for l in label_set):
+                        found.append({
+                            'team': event.get('teamName', 'Unknown'),
+                            'player': event.get('playerName', 'Unknown'),
+                            'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                            'partId': event.get('partId', 1)
+                        })
+            return found
+
+        def find_label_events(events, label_set):
+            found = []
+            for event in events:
+                labels = event.get('labels', []) or []
+                if any(l in labels for l in label_set):
+                    found.append({
+                        'team': event.get('teamName', 'Unknown'),
+                        'player': event.get('playerName', 'Unknown'),
+                        'time': int((event.get('startTimeMs', 0) or 0) / 1000 / 60),
+                        'partId': event.get('partId', 1)
+                    })
+            return found
+
+        successful_counter_pressure_labels = {214, 215, 216}
+        successful_pressure_labels = {213}
+        air_duel_total_labels = {210}
+        air_duel_won_labels = {211}
+        tackle_success_labels = {206}
+        interception_success_labels = {208}
+
+        all_successful_counter_pressures = find_successful_label_events(all_events, successful_counter_pressure_labels)
+        all_successful_pressures = find_successful_label_events(all_events, successful_pressure_labels)
+        all_air_duel_totals = find_label_events(all_events, air_duel_total_labels)
+        all_air_duel_wins = find_label_events(all_events, air_duel_won_labels)
+        all_successful_tackles = find_label_events(all_events, tackle_success_labels)
+        all_successful_interceptions = find_label_events(all_events, interception_success_labels)
+        
         # Create a mapping of events to their source files
         events_to_file = {}
         for file_idx, events_data in enumerate(all_events_data):
@@ -541,7 +583,7 @@ if all_events_data:
                     primary_position_by_player[pname] = 'N/A'
 
             return primary_position_by_player, player_position_durations_ms
-
+        
         # Calculate minutes played for all players across all matches
         total_player_minutes = {}
         
@@ -722,7 +764,7 @@ if all_events_data:
             # Count successful passes to box
             player_stats[player_name]['passes_to_box'] += 1
         
-        # Process counter pressures
+        # Process counter pressures (all occurrences) and successful variants
         for pressure_event in all_counter_pressures:
             player_name = pressure_event['player']
             if player_name not in player_stats:
@@ -739,6 +781,8 @@ if all_events_data:
                     'passes_to_box': 0,
                     'keypasses': 0,
                     'counter_pressures': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
                     'progressive_carries': 0,
                     'progressive_passes': 0,
                     'goals_prevented': 0.0,
@@ -750,9 +794,71 @@ if all_events_data:
                     'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
                     'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
-            
-            # Count counter pressures
+            # Count counter pressures (any)
             player_stats[player_name]['counter_pressures'] += 1
+
+        # Count successful counter pressures and pressures by labels
+        for ev in all_successful_counter_pressures:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'counter_pressures': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['successful_counter_pressures'] = player_stats[pname].get('successful_counter_pressures', 0) + 1
+
+        for ev in all_successful_pressures:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'counter_pressures': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['successful_pressures'] = player_stats[pname].get('successful_pressures', 0) + 1
         
         # Process goalkeeper events for GK performance calculation
         for gk_event in all_gk_events:
@@ -820,6 +926,7 @@ if all_events_data:
                 player_stats[player_name] = {
                     'team': p['team'],
                     'xG': 0.0,
+                    'xA': 0.0,
                     'PSxG': 0.0,
                     'shots': 0,
                     'pbd': 0.0,
@@ -827,7 +934,11 @@ if all_events_data:
                     'takeons': 0,
                     'takeons_total': 0,
                     'passes_to_box': 0,
+                    'keypasses': 0,
                     'counter_pressures': 0,
+                    'successful_crosses': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
                     'progressive_carries': 0,
                     'progressive_passes': 0,
                     'goals_prevented': 0.0,
@@ -853,6 +964,9 @@ if all_events_data:
                 # Count key passes (label 82)
                 if 82 in labels:
                     player_stats[player_name]['keypasses'] = player_stats[player_name].get('keypasses', 0) + 1
+                # Count successful crosses (label 101)
+                if 101 in labels:
+                    player_stats[player_name]['successful_crosses'] = player_stats[player_name].get('successful_crosses', 0) + 1
             except Exception:
                 # Ignore malformed values
                 pass
@@ -963,10 +1077,16 @@ if all_events_data:
                         passes_to_box_display = f"{stats['passes_to_box'] * multiplier:.1f}"
                         counter_pressures_display = f"{stats['counter_pressures'] * multiplier:.1f}"
                         progressive_passes_display = f"{stats.get('progressive_passes', 0) * multiplier:.1f}"
+                        successful_crosses_display = f"{stats.get('successful_crosses', 0) * multiplier:.1f}"
+                        successful_counter_pressures_display = f"{stats.get('successful_counter_pressures', 0) * multiplier:.1f}"
+                        successful_pressures_display = f"{stats.get('successful_pressures', 0) * multiplier:.1f}"
                         goals_prevented_display = f"{stats['goals_prevented'] * multiplier:.2f}"
                         psxg_faced_display = f"{stats['psxg_faced'] * multiplier:.2f}"
                         goals_allowed_display = f"{stats['goals_allowed'] * multiplier:.1f}"
                         progressive_carries_display = f"{stats.get('progressive_carries', 0) * multiplier:.1f}"
+                        air_duels_won_display = f"{stats.get('air_duels_won', 0) * multiplier:.1f}"
+                        successful_tackles_display = f"{stats.get('successful_tackles', 0) * multiplier:.1f}"
+                        successful_interceptions_display = f"{stats.get('successful_interceptions', 0) * multiplier:.1f}"
                     else:
                         xg_display = f"{stats['xG']:.3f}"
                         xa_display = f"{stats.get('xA', 0.0):.3f}"
@@ -980,10 +1100,16 @@ if all_events_data:
                         passes_to_box_display = f"{stats['passes_to_box']:.0f}"
                         counter_pressures_display = f"{stats['counter_pressures']:.0f}"
                         progressive_passes_display = f"{stats.get('progressive_passes', 0):.0f}"
+                        successful_crosses_display = f"{stats.get('successful_crosses', 0):.0f}"
+                        successful_counter_pressures_display = f"{stats.get('successful_counter_pressures', 0):.0f}"
+                        successful_pressures_display = f"{stats.get('successful_pressures', 0):.0f}"
                         goals_prevented_display = f"{stats['goals_prevented']:.2f}"
                         psxg_faced_display = f"{stats['psxg_faced']:.2f}"
                         goals_allowed_display = f"{stats['goals_allowed']:.0f}"
                         progressive_carries_display = f"{stats.get('progressive_carries', 0):.0f}"
+                        air_duels_won_display = f"{stats.get('air_duels_won', 0):.0f}"
+                        successful_tackles_display = f"{stats.get('successful_tackles', 0):.0f}"
+                        successful_interceptions_display = f"{stats.get('successful_interceptions', 0):.0f}"
                     
                     table_data.append({
                         'Rank': i + 1,
@@ -1000,11 +1126,18 @@ if all_events_data:
                         'PBP': pbp_display,
                         'Key passes': f"{stats.get('keypasses', 0):.0f}" if not per_96_minutes else f"{stats.get('keypasses', 0) * multiplier:.1f}",
                         'Progressive Passes': progressive_passes_display,
+                        'Successful Crosses': successful_crosses_display,
+                        'Successful Counter Pressures': successful_counter_pressures_display,
+                        'Successful Pressures': successful_pressures_display,
                         'Take-ons': takeons_display,
                         'Take-on %': takeon_success_pct_display,
                         'Progressive Carries': progressive_carries_display,
                         'Passes to Box': passes_to_box_display,
                         'Counter Pressures': counter_pressures_display,
+                        'Air Duels Won': air_duels_won_display,
+                        'Air Duels Win %': f"{stats.get('air_duels_win_pct', 0.0):.1f}%",
+                        'Successful Tackles': successful_tackles_display,
+                        'Successful Interceptions': successful_interceptions_display,
                         'Goals Prevented': goals_prevented_display,
                         'PSxG Faced': psxg_faced_display,
                         'Goals Allowed': goals_allowed_display,
@@ -1031,9 +1164,16 @@ if all_events_data:
                         "PBP": st.column_config.NumberColumn("PBP", width="small", format="%.1f", help="Progression By Passes (meters)"),
                             "Key passes": st.column_config.NumberColumn("Key passes", width="small"),
                         "Progressive Passes": st.column_config.NumberColumn("Progressive Passes", width="small"),
+                            "Successful Crosses": st.column_config.NumberColumn("Successful Crosses", width="small"),
+                            "Successful Counter Pressures": st.column_config.NumberColumn("Successful Counter Pressures", width="small"),
+                            "Successful Pressures": st.column_config.NumberColumn("Successful Pressures", width="small"),
                         "Take-ons": st.column_config.NumberColumn("Take-ons", width="small", format="%.0f", help="Successful take-ons (label 121)"),
                         "Take-on %": st.column_config.TextColumn("Take-on %", width="small", help="Take-on success percentage"),
                         "Progressive Carries": st.column_config.NumberColumn("Progressive Carries", width="small"),
+                        "Air Duels Won": st.column_config.NumberColumn("Air Duels Won", width="small"),
+                        "Air Duels Win %": st.column_config.TextColumn("Air Duels Win %", width="small"),
+                        "Successful Tackles": st.column_config.NumberColumn("Successful Tackles", width="small"),
+                        "Successful Interceptions": st.column_config.NumberColumn("Successful Interceptions", width="small"),
                         "Passes to Box": st.column_config.NumberColumn("Passes to Box", width="small", format="%.0f", help="Successful passes to box (label 72)"),
                         "Counter Pressures": st.column_config.NumberColumn("Counter Pressures", width="small", format="%.0f", help="Counter pressure actions (label 215)"),
                         "Goals Prevented": st.column_config.NumberColumn("Goals Prevented", width="small", format="%.2f", help="PSxG Faced - Goals Allowed"),
