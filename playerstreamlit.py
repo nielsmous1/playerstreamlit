@@ -362,7 +362,43 @@ if all_events_data:
             
             return player_minutes
         
-        # Calculate players' primary positions across the entire season
+        # Position mapping to Dutch, more general positions
+        POSITION_MAP_NL = {
+            'GK': 'DM',
+            'LB': 'LV',
+            'LWB': 'LVV',
+            'LCB': 'CV',
+            'CB': 'CV',
+            'RCB': 'CV',
+            'RWB': 'RVV',
+            'RB': 'RV',
+            'LDMF': 'VM',
+            'DMF': 'VM',
+            'RDMF': 'VM',
+            'LCM': 'CM',
+            'CM': 'CM',
+            'RCM': 'CM',
+            'LW': 'LB',
+            'RW': 'RB',
+            'LWF': 'LB',
+            'RWF': 'RB',
+            'LAMF': 'LB',
+            'RAMF': 'RB',
+            'AMF': 'AM',
+            'LCF': 'SP',
+            'RCF': 'SP',
+            'CF': 'SP',
+            'RM': 'RM',
+            'LM': 'LM'
+        }
+
+        def map_position_to_nl(raw_position_name: str):
+            if not raw_position_name:
+                return raw_position_name
+            key = str(raw_position_name).strip().upper()
+            return POSITION_MAP_NL.get(key, raw_position_name)
+
+        # Calculate players' primary positions across the entire season (with position mapping)
         def calculate_primary_positions_across_matches(all_matches_events):
             """Aggregate position durations per player name across all matches and return primary position per player.
             Uses POSITION events (baseTypeId 18 with subTypeId 1800/1801) and closes stints on period end events (baseTypeId 14, subTypeId 1401).
@@ -404,6 +440,7 @@ if all_events_data:
                         player_name = e.get('playerName')
                         position_type_name = e.get('positionTypeName')
                         if player_name and player_name != 'NOT_APPLICABLE' and player_name != 'Unknown' and player_name.strip() and position_type_name and position_type_name != 'UNKNOWN':
+                            mapped_position = map_position_to_nl(position_type_name)
                             if player_name in current_player_position:
                                 prev = current_player_position[player_name]
                                 # Only add if stint was active
@@ -412,7 +449,7 @@ if all_events_data:
                                     if duration > 0:
                                         player_position_durations_ms[player_name][prev['position_name']] += duration
                             current_player_position[player_name] = {
-                                'position_name': position_type_name,
+                                'position_name': mapped_position,
                                 'start_time': event_time_ms
                             }
 
