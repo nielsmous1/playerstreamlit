@@ -483,6 +483,30 @@ if all_events_data:
 
         # Pre-compute primary positions across the whole season
         primary_positions_by_player, _position_duration_ms = calculate_primary_positions_across_matches(all_events_data)
+
+        # Summarize minutes for primary, second, and third positions per player
+        def summarize_position_minutes(position_duration_ms):
+            summaries = {}
+            for pname, pos_map in position_duration_ms.items():
+                # Sort by duration descending
+                sorted_items = sorted(pos_map.items(), key=lambda kv: kv[1], reverse=True)
+                primary_minutes = (sorted_items[0][1] / 60000.0) if len(sorted_items) >= 1 else 0.0
+                second_name = sorted_items[1][0] if len(sorted_items) >= 2 else None
+                third_name = sorted_items[2][0] if len(sorted_items) >= 3 else None
+                secondary_positions = " / ".join([p for p in [second_name, third_name] if p])
+                secondary_minutes = 0.0
+                if len(sorted_items) >= 2:
+                    secondary_minutes += sorted_items[1][1] / 60000.0
+                if len(sorted_items) >= 3:
+                    secondary_minutes += sorted_items[2][1] / 60000.0
+                summaries[pname] = {
+                    'primary_minutes': primary_minutes,
+                    'secondary_positions': secondary_positions,
+                    'secondary_minutes': secondary_minutes
+                }
+            return summaries
+
+        position_minutes_summary = summarize_position_minutes(_position_duration_ms)
         
         # Process shots
         for shot in all_shots:
@@ -502,7 +526,10 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0),
-                    'position': primary_positions_by_player.get(player_name, 'N/A')
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
             
             player_stats[player_name]['xG'] += shot['xG']
@@ -528,7 +555,10 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0),
-                    'position': primary_positions_by_player.get(player_name, 'N/A')
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
             
             # Add goal progression (negative means closer to goal, so we add the negative value)
@@ -554,7 +584,10 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0),
-                    'position': primary_positions_by_player.get(player_name, 'N/A')
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
             
             # Count total take-ons
@@ -582,7 +615,10 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0),
-                    'position': primary_positions_by_player.get(player_name, 'N/A')
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
             
             # Count successful passes to box
@@ -606,7 +642,10 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(player_name, 0),
-                    'position': primary_positions_by_player.get(player_name, 'N/A')
+                    'position': primary_positions_by_player.get(player_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(player_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(player_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(player_name, {}).get('secondary_minutes', 0.0)
                 }
             
             # Count counter pressures
@@ -630,8 +669,20 @@ if all_events_data:
                     'psxg_faced': 0.0,
                     'goals_allowed': 0,
                     'minutes_played': total_player_minutes.get(gk_name, 0),
-                    'position': primary_positions_by_player.get(gk_name, 'N/A')
+                    'position': primary_positions_by_player.get(gk_name, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(gk_name, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(gk_name, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(gk_name, {}).get('secondary_minutes', 0.0)
                 }
+
+        # Ensure all players present in stats have position-minute summaries (in case created before summaries)
+        for pname, stats in player_stats.items():
+            if 'primary_position_minutes' not in stats:
+                stats['primary_position_minutes'] = position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0)
+            if 'secondary_positions' not in stats:
+                stats['secondary_positions'] = position_minutes_summary.get(pname, {}).get('secondary_positions', '')
+            if 'secondary_positions_minutes' not in stats:
+                stats['secondary_positions_minutes'] = position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
             
             # Add PSxG faced for all save attempts (both successful and unsuccessful)
             # PSxG faced = 1 - xS for each save attempt
@@ -749,6 +800,9 @@ if all_events_data:
                         'Player': player_name,
                         'Team': stats['team'],
                         'Position': stats.get('position', 'N/A'),
+                        'Primary Pos Minutes': f"{stats.get('primary_position_minutes', 0.0):.0f}",
+                        '2nd/3rd Positions': stats.get('secondary_positions', ''),
+                        '2nd+3rd Minutes': f"{stats.get('secondary_positions_minutes', 0.0):.0f}",
                         'Minutes': f"{stats['minutes_played']:.0f}",
                         'xG': xg_display,
                         'PSxG': psxg_display,
@@ -774,6 +828,9 @@ if all_events_data:
                         "Player": st.column_config.TextColumn("Player", width="medium"),
                         "Team": st.column_config.TextColumn("Team", width="small"),
                             "Position": st.column_config.TextColumn("Position", width="small"),
+                            "Primary Pos Minutes": st.column_config.NumberColumn("Primary Pos Minutes", width="small"),
+                            "2nd/3rd Positions": st.column_config.TextColumn("2nd/3rd Positions", width="small"),
+                            "2nd+3rd Minutes": st.column_config.NumberColumn("2nd+3rd Minutes", width="small"),
                         "Minutes": st.column_config.NumberColumn("Minutes", width="small"),
                         "xG": st.column_config.NumberColumn("xG", width="small", format="%.3f"),
                         "PSxG": st.column_config.NumberColumn("PSxG", width="small", format="%.3f"),
