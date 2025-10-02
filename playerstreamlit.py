@@ -1978,8 +1978,9 @@ if all_events_data:
                                 ax.plot([angle, angle], [0, value], color=color, linewidth=3, alpha=0.8)
                                 ax.scatter([angle], [value], color=color, s=50, zorder=5)
                             
-                            # Connect the dots (no outer circle)
+                            # Connect the dots
                             ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=1, alpha=0.3)
+                            ax.fill(angles_plot, radar_plot_values, color='#333333', alpha=0.1)
                             
                             ax.set_theta_offset(np.pi / 2)
                             ax.set_theta_direction(-1)
@@ -1989,7 +1990,8 @@ if all_events_data:
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
                             ax.set_yticklabels(["20", "40", "60", "80", "100"])
-                            ax.grid(alpha=0.2)
+                            # Remove the outer circle (grid)
+                            ax.grid(False)
                             ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=12, pad=20)
                             
                             # Add legend for groups
@@ -2010,14 +2012,18 @@ if all_events_data:
                         
                         # Find all matches played by the selected player
                         player_matches = []
-                        for match_file, events in all_events_data.items():
+                        for i, events in enumerate(all_events_data):
                             # Check if player played in this match
                             player_minutes = calculate_player_minutes(events)
                             if selected_player_global in player_minutes and player_minutes[selected_player_global] > 0:
-                                # Parse match info from filename
-                                home_team, away_team, date = parse_teams_from_filename(match_file)
-                                match_name = f"{home_team} vs {away_team}"
-                                player_matches.append((match_name, date, events))
+                                # Get match name from filename
+                                if i < len(file_names):
+                                    match_file = file_names[i]
+                                    home_team, away_team, date = parse_teams_from_filename(match_file)
+                                    match_name = f"{home_team} vs {away_team}" if home_team and away_team else f"Match {i+1}"
+                                else:
+                                    match_name = f"Match {i+1}"
+                                player_matches.append((match_name, "Unknown", events))
                         
                         if player_matches:
                             # Sort matches by date
