@@ -1190,7 +1190,7 @@ if all_events_data:
             idx = int(min(9, max(0, rating_0_100 // 10)))
             return palette[int(idx)]
 
-        analysis_tab, dashboard_tab, percentiles_tab = st.tabs(["Analysis", "Dashboard", "Percentiles"])
+        analysis_tab, dashboard_tab, percentiles_tab, dashboard2_tab = st.tabs(["Analysis", "Dashboard", "Percentiles", "Dashboard2"])
 
         with analysis_tab:
             st.subheader("Player Performance Analysis")
@@ -1824,3 +1824,178 @@ if all_events_data:
                     render_group_section(gname, items)
             else:
                 st.info("Metric groups are currently only available for Backs. Select a back or the Backs group.")
+
+        with dashboard2_tab:
+            st.subheader("Dashboard2")
+            
+            if selected_player_global:
+                stats = valid_players[selected_player_global]
+                position_group = stats.get('position_group', '')
+                
+                # Layout: top row with player info and radar chart
+                top_cols = st.columns([1, 2])
+                
+                # Top left: Player info
+                with top_cols[0]:
+                    st.markdown("**Player Information**")
+                    st.markdown(f"**Name:** {selected_player_global}")
+                    st.markdown(f"**Team:** {stats.get('team', 'N/A')}")
+                    st.markdown(f"**Minutes Played:** {stats.get('minutes_played', 0):.0f}")
+                    st.markdown(f"**Primary Position:** {stats.get('position', 'N/A')}")
+                    st.markdown(f"**Position Group:** {position_group}")
+                
+                # Top right: Radar chart with metrics colored by group
+                with top_cols[1]:
+                    if position_group in backs_groups:
+                        st.markdown("**Performance Radar by Metric Group**")
+                        
+                        # Collect all metrics from all groups
+                        all_metrics = []
+                        group_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+                        group_names = []
+                        
+                        for i, (group_name, items) in enumerate(backs_groups.items()):
+                            for label, key in items:
+                                all_metrics.append((label, key, group_name, group_colors[i % len(group_colors)]))
+                                if group_name not in group_names:
+                                    group_names.append(group_name)
+                        
+                        if all_metrics:
+                            # Get values for selected player
+                            def get_value_per96(pstats, key):
+                                value = pstats.get(key, 0.0)
+                                minutes = max(pstats.get('minutes_played', 0), 1e-9)
+                                return float(value) * (96.0 / minutes) if minutes > 0 else 0.0
+                            
+                            # Calculate percentiles for radar chart
+                            def calculate_percentile_rank(values, target_value):
+                                if not values:
+                                    return 50.0
+                                sorted_values = sorted(values)
+                                count_below = sum(1 for v in sorted_values if v < target_value)
+                                count_equal = sum(1 for v in sorted_values if v == target_value)
+                                total_count = len(sorted_values)
+                                if total_count == 0:
+                                    return 50.0
+                                percentile = (count_below + 0.5 * count_equal) / total_count * 100
+                                return max(0.0, min(100.0, percentile))
+                            
+                            # Get all players in the same position group for percentile calculation
+                            group_players = [(name, p) for name, p in valid_players.items() 
+                                           if p.get('position_group') == position_group]
+                            
+                            # Calculate percentiles for each metric
+                            radar_values = []
+                            radar_labels = []
+                            metric_colors = []
+                            
+                            for label, key, group_name, color in all_metrics:
+                                # Get all values for this metric in the position group
+                                all_values = [get_value_per96(p, key) for _, p in group_players]
+                                player_value = get_value_per96(stats, key)
+                                percentile = calculate_percentile_rank(all_values, player_value)
+                                
+                                radar_values.append(percentile)
+                                radar_labels.append(label)
+                                metric_colors.append(color)
+                            
+                            # Create radar chart
+                            num_vars = len(radar_values)
+                            angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+                            radar_plot_values = radar_values + radar_values[:1]
+                            angles_plot = angles + angles[:1]
+                            
+                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(8, 8))
+                            
+                            # Plot each metric with its group color
+                            for i, (angle, value, color) in enumerate(zip(angles, radar_values, metric_colors)):
+                                ax.plot([angle, angle], [0, value], color=color, linewidth=3, alpha=0.8)
+                                ax.scatter([angle], [value], color=color, s=50, zorder=5)
+                            
+                            # Connect the dots
+                            ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=1, alpha=0.3)
+                            ax.fill(angles_plot, radar_plot_values, color='#333333', alpha=0.1)
+                            
+                            ax.set_theta_offset(np.pi / 2)
+                            ax.set_theta_direction(-1)
+                            ax.set_rlabel_position(0)
+                            ax.set_xticks(angles)
+                            ax.set_xticklabels(radar_labels, fontsize=9)
+                            ax.set_ylim(0, 100)
+                            ax.set_yticks([20, 40, 60, 80, 100])
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"])
+                            ax.grid(alpha=0.2)
+                            ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=12, pad=20)
+                            
+                            # Add legend for groups
+                            legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
+                                                        lw=3, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0))
+                            
+                            st.pyplot(fig, use_container_width=True)
+                        else:
+                            st.info("No metrics available for radar chart")
+                    else:
+                        st.info("Radar chart only available for Backs position group")
+                
+                # Bottom: Metric group scores (using weights from percentiles tab)
+                st.markdown("---")
+                st.markdown("**Metric Group Scores**")
+                
+                if position_group in backs_groups:
+                    group_metrics = backs_groups[position_group]
+                    
+                    # Create columns for metric group scores
+                    score_cols = st.columns(len(group_metrics))
+                    
+                    for i, (group_name, items) in enumerate(group_metrics.items()):
+                        with score_cols[i]:
+                            # Calculate group rating using the same logic as percentiles tab
+                            group_players = [(name, p) for name, p in valid_players.items() 
+                                           if p.get('position_group') == position_group]
+                            
+                            if group_players:
+                                # Get distributions for this group
+                                distributions_local = {}
+                                minmax_local = {}
+                                
+                                for _, key in items:
+                                    vals = []
+                                    for _, p in group_players:
+                                        val = get_value_per96(p, key)
+                                        vals.append(val)
+                                    distributions_local[key] = vals
+                                    minmax_local[key] = (min(vals) if vals else 0.0, max(vals) if vals else 1.0)
+                                
+                                # Calculate group rating (weighted average of percentiles)
+                                group_total = 0
+                                group_count = 0
+                                
+                                for _, key in items:
+                                    val = get_value_per96(stats, key)
+                                    pct = calculate_percentile_rank(distributions_local[key], val)
+                                    group_total += pct
+                                    group_count += 1
+                                
+                                group_rating = (group_total / group_count) if group_count > 0 else 50.0
+                                group_rating = max(0.0, min(100.0, group_rating))
+                                
+                                # Display group score
+                                group_color = _rating_color(group_rating)
+                                st.markdown(f"""
+                                <div style="background: {group_color}; 
+                                            color: white; padding: 15px 20px; border-radius: 8px; text-align: center; 
+                                            font-size: 18px; font-weight: bold; margin: 10px 0;">
+                                    {group_name}<br>{group_rating:.1f}
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Show individual metrics in this group
+                                st.markdown("**Metrics:**")
+                                for label, key in items:
+                                    value = get_value_per96(stats, key)
+                                    st.metric(label, f"{value:.2f}")
+                else:
+                    st.info(f"Metric group scores only available for Backs position group. Current group: {position_group}")
+            else:
+                st.info("Please select a player to view Dashboard2")
