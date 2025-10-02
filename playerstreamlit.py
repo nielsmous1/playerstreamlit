@@ -2018,9 +2018,10 @@ if all_events_data:
                             overall_color = _rating_color(overall_score)
                             st.markdown(f"""
                             <div style="background: {overall_color}; 
-                                        color: white; padding: 8px 12px; border-radius: 6px; text-align: center; 
-                                        font-size: 14px; font-weight: bold; margin: 5px 0;">
-                                Overall: {overall_score:.1f}
+                                        color: white; padding: 20px; border-radius: 12px; text-align: center; 
+                                        font-size: 28px; font-weight: bold; margin: 8px 0; 
+                                        width: 120px; height: 80px; display: flex; align-items: center; justify-content: center;">
+                                {overall_score:.1f}
                             </div>
                             """, unsafe_allow_html=True)
                             
@@ -2105,17 +2106,17 @@ if all_events_data:
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
                             ax.set_xticks(angles)
-                            ax.set_xticklabels(radar_labels, fontsize=3)
+                            ax.set_xticklabels(radar_labels, fontsize=8, fontweight='bold')
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
-                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=3)
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=8)
                             # Keep the inner grid, remove only the outer circle
                             ax.grid(True, alpha=0.2)
                             
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
-                                                        lw=1, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=3)
+                                                        lw=2, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
@@ -2232,12 +2233,12 @@ if all_events_data:
                                 
                                 # Set x-axis labels
                                 ax_line.set_xticks(range(len(match_names)))
-                                ax_line.set_xticklabels(match_names, fontsize=12)
+                                ax_line.set_xticklabels(match_names, fontsize=16, fontweight='bold')
                                 
                                 # Set y-axis limits and labels
                                 ax_line.set_ylim(0, 100)
-                                ax_line.set_ylabel('Overall Score', fontsize=14)
-                                ax_line.tick_params(axis='y', labelsize=12)
+                                ax_line.set_ylabel('Overall Score', fontsize=18, fontweight='bold')
+                                ax_line.tick_params(axis='y', labelsize=16)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig_line, use_container_width=True)
