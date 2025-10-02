@@ -1976,7 +1976,6 @@ if all_events_data:
                     # Performance scores (smaller, under general info)
                     if position_group == 'Backs':
                         st.markdown("---")
-                        st.markdown("**Performance Scores**")
                         
                         group_metrics = backs_groups
                         
@@ -2039,7 +2038,6 @@ if all_events_data:
                 # Top right: Radar chart with metrics colored by group
                 with top_cols[1]:
                     if position_group == 'Backs':
-                        st.markdown("**Performance Radar by Metric Group**")
                         
                         # Collect all metrics from all groups
                         all_metrics = []
@@ -2092,7 +2090,7 @@ if all_events_data:
                             radar_plot_values = radar_values + radar_values[:1]
                             angles_plot = angles + angles[:1]
                             
-                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(8, 8))
+                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6, 6))
                             
                             # Plot each metric with its group color
                             for i, (angle, value, color) in enumerate(zip(angles, radar_values, metric_colors)):
@@ -2129,7 +2127,6 @@ if all_events_data:
                 # Bottom right: Line chart showing performance over matches
                 with bottom_cols[1]:
                     if position_group == 'Backs':
-                        st.markdown("**Performance Over Matches**")
                         
                         # Find all matches played by the selected player
                         player_matches = []
@@ -2203,7 +2200,7 @@ if all_events_data:
                             
                             # Create line chart
                             if match_scores:
-                                fig_line, ax_line = plt.subplots(figsize=(10, 4))
+                                fig_line, ax_line = plt.subplots(figsize=(12, 4))
                                 
                                 # Plot the line
                                 ax_line.plot(range(len(match_scores)), match_scores, 
@@ -2212,7 +2209,6 @@ if all_events_data:
                                 # Style the chart
                                 ax_line.set_xlabel('Match')
                                 ax_line.set_ylabel('Overall Score')
-                                ax_line.set_title(f'{selected_player_global} - Performance Over Matches')
                                 ax_line.grid(True, alpha=0.3)
                                 
                                 # Set x-axis labels
