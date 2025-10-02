@@ -1894,8 +1894,6 @@ if all_events_data:
                 st.info("Metric groups are currently only available for Backs. Select a back or the Backs group.")
 
         with dashboard2_tab:
-            st.subheader("Dashboard2")
-            
             if selected_player_global:
                 stats = valid_players[selected_player_global]
                 position_group = stats.get('position_group', '')
@@ -1905,14 +1903,76 @@ if all_events_data:
                 top_cols = st.columns([1, 2])
                 bottom_cols = st.columns([1, 2])
                 
-                # Top left: Player info
+                # Top left: Player info and ratings
                 with top_cols[0]:
-                    st.markdown("**Player Information**")
-                    st.markdown(f"**Name:** {selected_player_global}")
-                    st.markdown(f"**Team:** {stats.get('team', 'N/A')}")
-                    st.markdown(f"**Minutes Played:** {stats.get('minutes_played', 0):.0f}")
-                    st.markdown(f"**Primary Position:** {stats.get('position', 'N/A')}")
-                    st.markdown(f"**Position Group:** {position_group}")
+                    # Player name with larger font
+                    st.markdown(f"<h2 style='margin-bottom: 10px;'>{selected_player_global}</h2>", unsafe_allow_html=True)
+                    st.markdown(f"**{stats.get('team', 'N/A')}**")
+                    st.markdown(f"{stats.get('minutes_played', 0):.0f} minutes played")
+                    st.markdown(f"**{stats.get('position', 'N/A')}**")
+                    
+                    # Performance scores (smaller, under general info)
+                    if position_group == 'Backs':
+                        st.markdown("---")
+                        st.markdown("**Performance Scores**")
+                        
+                        group_metrics = backs_groups
+                        
+                        # Calculate all group scores first
+                        group_scores = {}
+                        group_players = [(name, p) for name, p in valid_players.items() 
+                                       if p.get('position_group') == position_group]
+                        
+                        if group_players:
+                            for group_name, items in group_metrics.items():
+                                # Get distributions for this group
+                                distributions_local = {}
+                                
+                                for _, key in items:
+                                    vals = []
+                                    for _, p in group_players:
+                                        val = get_value_per96(p, key)
+                                        vals.append(val)
+                                    distributions_local[key] = vals
+                                
+                                # Calculate group rating using equal weights for all metrics
+                                group_total = 0
+                                group_count = 0
+                                
+                                for _, key in items:
+                                    val = get_value_per96(stats, key)
+                                    pct = calculate_percentile_rank(distributions_local[key], val)
+                                    group_total += pct  # Equal weight (1.0) for all metrics
+                                    group_count += 1
+                                
+                                group_rating = (group_total / group_count) if group_count > 0 else 50.0
+                                group_rating = max(0.0, min(100.0, group_rating))
+                                group_scores[group_name] = group_rating
+                            
+                            # Calculate overall score (average of all group scores)
+                            overall_score = sum(group_scores.values()) / len(group_scores) if group_scores else 50.0
+                            overall_score = max(0.0, min(100.0, overall_score))
+                            
+                            # Display overall score (smaller)
+                            overall_color = _rating_color(overall_score)
+                            st.markdown(f"""
+                            <div style="background: {overall_color}; 
+                                        color: white; padding: 8px 12px; border-radius: 6px; text-align: center; 
+                                        font-size: 14px; font-weight: bold; margin: 5px 0;">
+                                Overall: {overall_score:.1f}
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Display individual group scores (smaller)
+                            for group_name, group_rating in group_scores.items():
+                                group_color = _rating_color(group_rating)
+                                st.markdown(f"""
+                                <div style="background: {group_color}; 
+                                            color: white; padding: 6px 10px; border-radius: 4px; text-align: center; 
+                                            font-size: 12px; font-weight: bold; margin: 3px 0;">
+                                    {group_name}: {group_rating:.1f}
+                                </div>
+                                """, unsafe_allow_html=True)
                 
                 # Top right: Radar chart with metrics colored by group
                 with top_cols[1]:
@@ -1994,8 +2054,8 @@ if all_events_data:
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
                             ax.set_yticklabels(["20", "40", "60", "80", "100"])
-                            # Remove the outer circle (grid)
-                            ax.grid(False)
+                            # Keep the inner grid, remove only the outer circle
+                            ax.grid(True, alpha=0.2)
                             ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=12, pad=20)
                             
                             # Add legend for groups
@@ -2107,69 +2167,5 @@ if all_events_data:
                     else:
                         st.info("Line chart only available for Backs position group")
                 
-                # Bottom: Metric group scores and overall score
-                st.markdown("---")
-                st.markdown("**Performance Scores**")
-                
-                if position_group == 'Backs':
-                    group_metrics = backs_groups
-                    
-                    # Calculate all group scores first
-                    group_scores = {}
-                    group_players = [(name, p) for name, p in valid_players.items() 
-                                   if p.get('position_group') == position_group]
-                    
-                    if group_players:
-                        for group_name, items in group_metrics.items():
-                            # Get distributions for this group
-                            distributions_local = {}
-                            
-                            for _, key in items:
-                                vals = []
-                                for _, p in group_players:
-                                    val = get_value_per96(p, key)
-                                    vals.append(val)
-                                distributions_local[key] = vals
-                            
-                            # Calculate group rating using equal weights for all metrics
-                            group_total = 0
-                            group_count = 0
-                            
-                            for _, key in items:
-                                val = get_value_per96(stats, key)
-                                pct = calculate_percentile_rank(distributions_local[key], val)
-                                group_total += pct  # Equal weight (1.0) for all metrics
-                                group_count += 1
-                            
-                            group_rating = (group_total / group_count) if group_count > 0 else 50.0
-                            group_rating = max(0.0, min(100.0, group_rating))
-                            group_scores[group_name] = group_rating
-                        
-                        # Calculate overall score (average of all group scores)
-                        overall_score = sum(group_scores.values()) / len(group_scores) if group_scores else 50.0
-                        overall_score = max(0.0, min(100.0, overall_score))
-                        
-                        # Display overall score (bigger and on top)
-                        overall_color = _rating_color(overall_score)
-                        st.markdown(f"""
-                        <div style="background: {overall_color}; 
-                                    color: white; padding: 20px 30px; border-radius: 10px; text-align: center; 
-                                    font-size: 24px; font-weight: bold; margin: 15px 0;">
-                            Overall Score<br>{overall_score:.1f}
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Display individual group scores (smaller, below overall)
-                        for group_name, group_rating in group_scores.items():
-                            group_color = _rating_color(group_rating)
-                            st.markdown(f"""
-                            <div style="background: {group_color}; 
-                                        color: white; padding: 12px 20px; border-radius: 8px; text-align: center; 
-                                        font-size: 16px; font-weight: bold; margin: 8px 0;">
-                                {group_name}<br>{group_rating:.1f}
-                            </div>
-                            """, unsafe_allow_html=True)
-                else:
-                    st.info(f"Metric group scores only available for Backs position group. Current group: {position_group}")
             else:
                 st.info("Please select a player to view Dashboard2")
