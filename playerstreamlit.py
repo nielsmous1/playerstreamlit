@@ -1243,6 +1243,10 @@ if all_events_data:
         # Function to calculate match-specific stats
         def calculate_match_stats(events, player_name):
             """Calculate per-96 minute stats for a specific match"""
+            # Ensure events is a list
+            if isinstance(events, dict):
+                events = events.get('data', [])
+            
             player_minutes = calculate_player_minutes(events)
             if player_name not in player_minutes or player_minutes[player_name] <= 0:
                 return None
@@ -2012,7 +2016,12 @@ if all_events_data:
                         
                         # Find all matches played by the selected player
                         player_matches = []
-                        for i, events in enumerate(all_events_data):
+                        for i, match_data in enumerate(all_events_data):
+                            # Extract events from match data
+                            events = match_data.get('data', []) if isinstance(match_data, dict) else []
+                            if not events:
+                                continue
+                                
                             # Check if player played in this match
                             player_minutes = calculate_player_minutes(events)
                             if selected_player_global in player_minutes and player_minutes[selected_player_global] > 0:
