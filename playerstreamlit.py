@@ -272,7 +272,7 @@ if all_events_data:
         all_counter_pressures = find_counter_pressure_events(all_events)
         all_gk_events = find_goalkeeper_events(all_events)
         
-        # Additional label-based event collections
+        # Additional event collections by baseType/subType/resultId
         def find_successful_label_events(events, label_set):
             found = []
             for event in events:
@@ -287,11 +287,12 @@ if all_events_data:
                         })
             return found
 
-        def find_label_events(events, label_set):
+        def find_events_by_type_subtype(events, base_type, sub_type, result_id=None):
             found = []
             for event in events:
-                labels = event.get('labels', []) or []
-                if any(l in labels for l in label_set):
+                if (event.get('baseTypeId') == base_type and
+                    event.get('subTypeId') == sub_type and
+                    (result_id is None or event.get('resultId') == result_id)):
                     found.append({
                         'team': event.get('teamName', 'Unknown'),
                         'player': event.get('playerName', 'Unknown'),
@@ -302,17 +303,18 @@ if all_events_data:
 
         successful_counter_pressure_labels = {214, 215, 216}
         successful_pressure_labels = {213}
-        air_duel_total_labels = {210}
-        air_duel_won_labels = {211}
-        tackle_success_labels = {206}
-        interception_success_labels = {208}
 
         all_successful_counter_pressures = find_successful_label_events(all_events, successful_counter_pressure_labels)
         all_successful_pressures = find_successful_label_events(all_events, successful_pressure_labels)
-        all_air_duel_totals = find_label_events(all_events, air_duel_total_labels)
-        all_air_duel_wins = find_label_events(all_events, air_duel_won_labels)
-        all_successful_tackles = find_label_events(all_events, tackle_success_labels)
-        all_successful_interceptions = find_label_events(all_events, interception_success_labels)
+        # Air duels: baseType 4, subType 402 (any result)
+        all_air_duel_totals = find_events_by_type_subtype(all_events, 4, 402)
+        all_air_duel_wins = find_events_by_type_subtype(all_events, 4, 402, 1)
+        # Tackles: baseType 4, subType 400 (any result)
+        all_tackle_totals = find_events_by_type_subtype(all_events, 4, 400)
+        all_successful_tackles = find_events_by_type_subtype(all_events, 4, 400, 1)
+        # Interceptions: baseType 5, subType 500 (any result)
+        all_interception_totals = find_events_by_type_subtype(all_events, 5, 500)
+        all_successful_interceptions = find_events_by_type_subtype(all_events, 5, 500, 1)
         
         # Create a mapping of events to their source files
         events_to_file = {}
