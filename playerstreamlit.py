@@ -1739,9 +1739,9 @@ if all_events_data:
                             ax.vlines(big3_avg, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
                         # highlight selected player
                         sel_stats = valid_players.get(selected_player_global)
-                            if sel_stats and sel_stats.get('position_group') == effective_group:
-                                sel_val = value_per96(sel_stats, key)
-                                ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
+                        if sel_stats and sel_stats.get('position_group') == effective_group:
+                            sel_val = value_per96(sel_stats, key)
+                            ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
                     ax.set_yticks(y_positions); ax.set_yticklabels(metrics_display)
                     ax.set_xlim(left=0, right=group_xmax)
                     # Add ticks for each bar baseline
@@ -1754,13 +1754,13 @@ if all_events_data:
                     # Compute selected player's rating (weighted average of percentiles within group)
                     rating_value = None
                     sel_stats = valid_players.get(selected_player_global)
-                        if sel_stats and sel_stats.get('position_group') == effective_group:
-                            parts = []
-                            for _, key in items:
-                                val = value_per96(sel_stats, key)
-                                pct = percentile_minmax(minmax_local[key], val)
-                                parts.append(pct * norm_weights[key])
-                            rating_value = sum(parts)
+                    if sel_stats and sel_stats.get('position_group') == effective_group:
+                        parts = []
+                        for _, key in items:
+                            val = value_per96(sel_stats, key)
+                            pct = percentile_minmax(minmax_local[key], val)
+                            parts.append(pct * norm_weights[key])
+                        rating_value = sum(parts)
                     if rating_value is not None:
                         # Show rating in a colored badge next to title
                         badge_html = badge(group_name, rating_value, is_pct=True)
@@ -1769,21 +1769,21 @@ if all_events_data:
                     # Per-game rating series for the selected player
                     sel_stats = valid_players.get(selected_player_global)
                     if sel_stats and sel_stats.get('position_group') == effective_group:
-                            series_x = []
-                            series_y = []
-                            for match_idx, events_data in enumerate(all_events_data):
-                                events = events_data.get('data', []) if isinstance(events_data, dict) else []
-                                # compute minutes for player in this match
-                                match_minutes_map = calculate_player_minutes(events)
-                                minutes = float(match_minutes_map.get(selected_player_search, 0))
-                                # per-match metric values
-                                per_match_vals = {k: 0.0 for _, k in items}
-                                # iterate events to fill values
-                                for ev in events:
-                                    if ev.get('playerName') != selected_player_global:
-                                        continue
-                                    labels = ev.get('labels', []) or []
-                                    base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
+                        series_x = []
+                        series_y = []
+                        for match_idx, events_data in enumerate(all_events_data):
+                            events = events_data.get('data', []) if isinstance(events_data, dict) else []
+                            # compute minutes for player in this match
+                            match_minutes_map = calculate_player_minutes(events)
+                            minutes = float(match_minutes_map.get(selected_player_global, 0))
+                            # per-match metric values
+                            per_match_vals = {k: 0.0 for _, k in items}
+                            # iterate events to fill values
+                            for ev in events:
+                                if ev.get('playerName') != selected_player_global:
+                                    continue
+                                labels = ev.get('labels', []) or []
+                                base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
                                     # Dribbles/PBD and progressive carries
                                     if base == 3 and sub == 300 and result == 1:
                                         gp = ev.get('metrics', {}).get('goalProgression', 0.0) or 0.0
