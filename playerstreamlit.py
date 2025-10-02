@@ -1175,6 +1175,11 @@ if all_events_data:
                         if name and name != 'NOT_APPLICABLE' and name != 'Unknown' and name.strip()}
         sorted_players = sorted(valid_players.items(), key=lambda x: x[1]['xG'], reverse=True)
         
+        # Global player selector (applies to Dashboard and Percentiles)
+        st.markdown("**Player selection**")
+        global_player_options = sorted(list({name for name in valid_players.keys()}))
+        selected_player_global = st.selectbox("Select player", options=global_player_options)
+
         analysis_tab, dashboard_tab, percentiles_tab = st.tabs(["Analysis", "Dashboard", "Percentiles"])
 
         with analysis_tab:
@@ -1347,10 +1352,9 @@ if all_events_data:
             st.subheader("Dashboard")
             dashboard_cols = st.columns([2, 2, 3])
 
-            # Player selector
+            # Player info (uses global selection)
             with dashboard_cols[0]:
-                player_options = sorted(list(valid_players.keys()))
-                selected_player = st.selectbox("Select player", options=player_options)
+                selected_player = selected_player_global
 
             # Show standard info
             if selected_player:
@@ -1568,34 +1572,16 @@ if all_events_data:
 
             left, right = st.columns([2, 3])
             with left:
-                # Player selection (searchable) and auto-position group detection
-                player_options = sorted(list(valid_players.keys()))
-                player_options_with_none = ["(none)"] + player_options
-                selected_player_search = st.selectbox("Select player (optional)", options=player_options_with_none, index=0)
-
+                # Auto-position group detection from global selection
                 pos_groups = list(POSITION_GROUPS.keys())
-                # Default to player's group if selected
-                if selected_player_search != "(none)":
-                    player_group_auto = valid_players.get(selected_player_search, {}).get('position_group', 'Onbekend')
-                    selected_group = st.selectbox("Position group", options=pos_groups, index=max(0, pos_groups.index(player_group_auto) if player_group_auto in pos_groups else 0))
-                    st.caption(f"Using group '{selected_group}' based on {selected_player_search}'s primary position" if player_group_auto in pos_groups else "Select a position group")
-                else:
-                    selected_group = st.selectbox("Position group", options=pos_groups)
-
-                selected_metrics = st.multiselect(
-                    "Select metrics",
-                    options=list(metrics_catalog.keys()),
-                    default=['xG', 'Shots', 'PBD (m)']
-                )
+                player_group_auto = valid_players.get(selected_player_global, {}).get('position_group', 'Onbekend')
+                selected_group = st.selectbox("Position group", options=pos_groups, index=max(0, pos_groups.index(player_group_auto) if player_group_auto in pos_groups else 0))
+                st.caption(f"Using group '{selected_group}' based on {selected_player_global}'s primary position" if player_group_auto in pos_groups else "Select a position group")
                 per96 = st.checkbox("Per 96 minutes", value=True)
                 show_percentile = st.checkbox("Show percentiles (0-100)", value=True)
 
             # Build dataset for the selected group (override to player's group if selected)
             effective_group = selected_group
-            if selected_player_search != "(none)":
-                auto_group = valid_players.get(selected_player_search, {}).get('position_group', None)
-                if auto_group in POSITION_GROUPS:
-                    effective_group = auto_group
             group_players = [(name, p) for name, p in valid_players.items() if p.get('position_group') == effective_group]
             # Compute per-96 values where applicable
             def value_per96(pstats, key):
@@ -1642,57 +1628,11 @@ if all_events_data:
                 rows.append(row)
 
             with right:
-                # Build dynamic column config: Minutes no decimals, metrics 2 decimals
-                col_config = {
-                    'Player': st.column_config.TextColumn('Player', width='medium'),
-                    'Team': st.column_config.TextColumn('Team', width='small'),
-                    'Position': st.column_config.TextColumn('Position', width='small'),
-                    'Minutes': st.column_config.NumberColumn('Minutes', width='small', format='%.0f')
-                }
-                for label in selected_metrics:
-                    col_config[label] = st.column_config.NumberColumn(label, width='small', format='%.2f')
-                st.dataframe(rows, use_container_width=True, hide_index=True, column_config=col_config)
+                # Removed detailed table in favor of group sections below
+                pass
 
             # Distribution chart similar to dashboard
-            if selected_metrics and group_players:
-                chart_cols = st.columns([3, 4])
-                with chart_cols[0]:
-                    fig_h, ax_h = plt.subplots(figsize=(8, 6))
-                    metrics_display = list(reversed(selected_metrics))
-                    keys_display = list(reversed(metric_keys))
-                    y_positions = np.arange(len(keys_display))
-                    for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
-                        values_raw = distributions[key]
-                        if show_percentile:
-                            vmin, vmax = dist_minmax[key]
-                            x_vals = [percentile_minmax((vmin, vmax), v) for v in values_raw]
-                            xmax = 100.0
-                        else:
-                            x_vals = values_raw
-                            xmax = (max(values_raw) if values_raw else 1.0)
-                        if not show_percentile and xmax == 0:
-                            xmax = 1.0
-                        y = y_positions[idx]
-                        ax_h.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
-                        jitter = (np.random.rand(len(x_vals)) - 0.5) * 0.15
-                        ax_h.scatter(x_vals, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
-                        # Highlight selected player if provided and in group
-                        if selected_player_search != "(none)":
-                            sel_stats = valid_players.get(selected_player_search)
-                            if sel_stats and sel_stats.get('position_group') == effective_group:
-                                sel_val_raw = value_per96(sel_stats, key)
-                                sel_val = percentile_minmax(dist_minmax[key], sel_val_raw) if show_percentile else sel_val_raw
-                                ax_h.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
-                    ax_h.set_yticks(y_positions)
-                    ax_h.set_yticklabels(metrics_display)
-                    ax_h.set_xlim(left=0, right=(100.0 if show_percentile else xmax))
-                    ax_h.invert_yaxis()
-                    ax_h.set_xlabel("Percentile (0–100)" if show_percentile else ("Per 96" if per96 else "Raw value"))
-                    ax_h.set_title("Distribution by metric" + (" (percentile)" if show_percentile else ""))
-                    ax_h.grid(axis='x', alpha=0.15)
-                    for spine in ["top", "right", "left", "bottom"]:
-                        ax_h.spines[spine].set_visible(False)
-                    st.pyplot(fig_h, use_container_width=True)
+            # Removed overall distribution plot in favor of per-group charts below
 
             # Metric groups for Backs only (for now)
             if effective_group == 'Backs':
@@ -1724,6 +1664,20 @@ if all_events_data:
                     ]
                 }
 
+                def _rating_color(rating_0_100: float) -> str:
+                    # 10-step bins, 0-10 dark red to 90-100 dark green
+                    palette = [
+                        "#8b0000", "#b22222", "#dc143c", "#ff4500", "#ff8c00",
+                        "#ffd700", "#9acd32", "#32cd32", "#228b22", "#006400"
+                    ]
+                    idx = int(min(9, max(0, rating_0_100 // 10)))
+                    return palette[int(idx)]
+
+                def badge(text: str, value: float, is_pct: bool) -> str:
+                    val_display = f"{value:.1f}%" if is_pct else f"{value:.1f}"
+                    color = _rating_color(value if is_pct else value)
+                    return f"<span style='background:{color};color:white;padding:6px 10px;border-radius:6px;font-weight:600;'>{text}: {val_display}</span>"
+
                 def render_group_section(group_name, items):
                     st.markdown(f"### {group_name}")
                     # Prepare distributions and weights
@@ -1742,7 +1696,7 @@ if all_events_data:
                     weights = {}
                     for (label, key), c in zip(items, cols):
                         with c:
-                            weights[key] = st.slider(f"{label} w", 0.0, 2.0, 1.0, 0.1)
+                            weights[key] = st.slider(f"{label} weight", 0.0, 2.0, 1.0, 0.1)
                     # Normalize weights to sum to 1 if any > 0
                     total_w = sum(weights.values())
                     if total_w <= 0:
@@ -1756,16 +1710,20 @@ if all_events_data:
                     keys_display = metrics_keys_local[::-1]
                     y_positions = np.arange(len(keys_display))
                     big3_teams = {"PSV", "Ajax", "Feyenoord"}
+                    # global x-range across metrics in this group (true values, not percentiles)
+                    group_xmax = 1.0
+                    for key in keys_display:
+                        vals = distributions_local[key]
+                        if vals:
+                            group_xmax = max(group_xmax, float(max(vals)))
                     for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
                         vals = distributions_local[key]
                         x_vals = vals
-                        xmax = max(x_vals) if x_vals else 1.0
-                        if xmax == 0:
-                            xmax = 1.0
+                        xmax = group_xmax
                         y = y_positions[idx]
                         ax.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
-                        jitter = (np.random.rand(len(x_vals)) - 0.5) * 0.15
-                        ax.scatter(x_vals, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
+                        # No jitter: plot dots on a straight line
+                        ax.scatter(x_vals, [y] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
                         # competition average (within group)
                         if x_vals:
                             comp_avg = float(np.mean(x_vals))
@@ -1780,13 +1738,14 @@ if all_events_data:
                             big3_avg = float(np.mean(big3_vals))
                             ax.vlines(big3_avg, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
                         # highlight selected player
-                        if selected_player_search != "(none)":
-                            sel_stats = valid_players.get(selected_player_search)
+                        sel_stats = valid_players.get(selected_player_global)
                             if sel_stats and sel_stats.get('position_group') == effective_group:
                                 sel_val = value_per96(sel_stats, key)
                                 ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
                     ax.set_yticks(y_positions); ax.set_yticklabels(metrics_display)
-                    ax.set_xlim(left=0)
+                    ax.set_xlim(left=0, right=group_xmax)
+                    # Add ticks for each bar baseline
+                    ax.set_xticks(np.linspace(0, group_xmax, num=6))
                     ax.invert_yaxis(); ax.grid(axis='x', alpha=0.15)
                     for spine in ["top", "right", "left", "bottom"]:
                         ax.spines[spine].set_visible(False)
@@ -1794,8 +1753,7 @@ if all_events_data:
 
                     # Compute selected player's rating (weighted average of percentiles within group)
                     rating_value = None
-                    if selected_player_search != "(none)":
-                        sel_stats = valid_players.get(selected_player_search)
+                    sel_stats = valid_players.get(selected_player_global)
                         if sel_stats and sel_stats.get('position_group') == effective_group:
                             parts = []
                             for _, key in items:
@@ -1804,12 +1762,13 @@ if all_events_data:
                                 parts.append(pct * norm_weights[key])
                             rating_value = sum(parts)
                     if rating_value is not None:
-                        st.metric(f"{group_name} rating", f"{rating_value:.1f}")
+                        # Show rating in a colored badge next to title
+                        badge_html = badge(group_name, rating_value, is_pct=True)
+                        st.markdown(badge_html, unsafe_allow_html=True)
 
                     # Per-game rating series for the selected player
-                    if selected_player_search != "(none)":
-                        sel_stats = valid_players.get(selected_player_search)
-                        if sel_stats and sel_stats.get('position_group') == effective_group:
+                    sel_stats = valid_players.get(selected_player_global)
+                    if sel_stats and sel_stats.get('position_group') == effective_group:
                             series_x = []
                             series_y = []
                             for match_idx, events_data in enumerate(all_events_data):
@@ -1821,7 +1780,7 @@ if all_events_data:
                                 per_match_vals = {k: 0.0 for _, k in items}
                                 # iterate events to fill values
                                 for ev in events:
-                                    if ev.get('playerName') != selected_player_search:
+                                    if ev.get('playerName') != selected_player_global:
                                         continue
                                     labels = ev.get('labels', []) or []
                                     base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
@@ -1891,7 +1850,7 @@ if all_events_data:
                             # plot line chart
                             fig_s, ax_s = plt.subplots(figsize=(8, 3))
                             ax_s.plot(series_x, series_y, marker='o', color="#1f77b4")
-                            ax_s.set_title(f"{group_name} rating per match - {selected_player_search}")
+                            ax_s.set_title(f"{group_name} rating per match - {selected_player_global}")
                             ax_s.set_xlabel("Match #")
                             ax_s.set_ylabel("Rating (0-100)")
                             ax_s.grid(alpha=0.2)
