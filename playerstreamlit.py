@@ -1963,7 +1963,7 @@ if all_events_data:
                 
                 # Layout: top row with player info and radar chart, bottom row with line chart
                 top_cols = st.columns([1, 2])
-                bottom_cols = st.columns([1, 4])
+                bottom_cols = st.columns([1, 5])
                 
                 # Top left: Player info and ratings
                 with top_cols[0]:
@@ -2090,33 +2090,32 @@ if all_events_data:
                             radar_plot_values = radar_values + radar_values[:1]
                             angles_plot = angles + angles[:1]
                             
-                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(3, 3))
+                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(2, 2))
                             
                             # Plot each metric with its group color
                             for i, (angle, value, color) in enumerate(zip(angles, radar_values, metric_colors)):
-                                ax.plot([angle, angle], [0, value], color=color, linewidth=1.5, alpha=0.8)
-                                ax.scatter([angle], [value], color=color, s=20, zorder=5)
+                                ax.plot([angle, angle], [0, value], color=color, linewidth=1, alpha=0.8)
+                                ax.scatter([angle], [value], color=color, s=12, zorder=5)
                             
                             # Connect the dots
-                            ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=0.5, alpha=0.3)
+                            ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=0.3, alpha=0.3)
                             ax.fill(angles_plot, radar_plot_values, color='#333333', alpha=0.1)
                             
                             ax.set_theta_offset(np.pi / 2)
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
                             ax.set_xticks(angles)
-                            ax.set_xticklabels(radar_labels, fontsize=4)
+                            ax.set_xticklabels(radar_labels, fontsize=3)
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
-                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=4)
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=3)
                             # Keep the inner grid, remove only the outer circle
                             ax.grid(True, alpha=0.2)
-                            ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=6, pad=10)
                             
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
-                                                        lw=1.5, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=4)
+                                                        lw=1, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=3)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
@@ -2221,11 +2220,11 @@ if all_events_data:
                             
                             # Create line chart
                             if match_scores:
-                                fig_line, ax_line = plt.subplots(figsize=(25, 4))
+                                fig_line, ax_line = plt.subplots(figsize=(30, 5))
                                 
                                 # Plot the line
                                 ax_line.plot(range(len(match_scores)), match_scores, 
-                                           marker='o', linewidth=2, markersize=6, color='#1f77b4')
+                                           marker='o', linewidth=3, markersize=8, color='#1f77b4')
                                 
                                 # Style the chart
                                 
@@ -2233,10 +2232,12 @@ if all_events_data:
                                 
                                 # Set x-axis labels
                                 ax_line.set_xticks(range(len(match_names)))
-                                ax_line.set_xticklabels(match_names)
+                                ax_line.set_xticklabels(match_names, fontsize=12)
                                 
-                                # Set y-axis limits
+                                # Set y-axis limits and labels
                                 ax_line.set_ylim(0, 100)
+                                ax_line.set_ylabel('Overall Score', fontsize=14)
+                                ax_line.tick_params(axis='y', labelsize=12)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig_line, use_container_width=True)
