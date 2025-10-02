@@ -1607,6 +1607,22 @@ if all_events_data:
                 # All equal; return 50 to avoid NaN and indicate mid
                 return 50.0
 
+            def calculate_percentile_rank(values, target_value):
+                """Calculate true percentile rank (better than X% of the group)."""
+                if not values:
+                    return 50.0
+                sorted_values = sorted(values)
+                count_below = sum(1 for v in sorted_values if v < target_value)
+                count_equal = sum(1 for v in sorted_values if v == target_value)
+                total_count = len(sorted_values)
+                
+                if total_count == 0:
+                    return 50.0
+                
+                # Percentile rank = (count_below + 0.5 * count_equal) / total_count * 100
+                percentile = (count_below + 0.5 * count_equal) / total_count * 100
+                return max(0.0, min(100.0, percentile))
+
             with right:
                 # Reserved for future summary; group sections below handle visuals and ratings
                 st.empty()
@@ -1683,11 +1699,18 @@ if all_events_data:
                         parts = []
                         for _, key in items:
                             val = value_per96(sel_stats, key)
-                            pct = percentile_minmax(minmax_local[key], val)
+                            pct = calculate_percentile_rank(distributions_local[key], val)
                             parts.append(pct * norm_weights[key])
                         rating_value = max(0.0, min(100.0, sum(parts)))
                     if rating_value is not None:
-                        st.markdown(badge(group_name, rating_value, is_pct=True), unsafe_allow_html=True)
+                        # Larger overall rating without percentage sign
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, {_rating_color(rating_value)}, {_rating_color(rating_value, alpha=0.7)}); 
+                                    color: white; padding: 12px 20px; border-radius: 8px; text-align: center; 
+                                    font-size: 18px; font-weight: bold; margin: 10px 0;">
+                            {group_name}: {rating_value:.1f}
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     # Per-metric percentile badges for selected player
                     sel_stats = valid_players.get(selected_player_global)
@@ -1695,10 +1718,8 @@ if all_events_data:
                         cols_pct = st.columns(len(items))
                         for (label, key), c in zip(items, cols_pct):
                             with c:
-                                vmin, vmax = minmax_local[key]
                                 val = value_per96(sel_stats, key)
-                                pct = percentile_minmax((vmin, vmax), val)
-                                pct = max(0.0, min(100.0, pct))
+                                pct = calculate_percentile_rank(distributions_local[key], val)
                                 st.markdown(badge(label, pct, is_pct=True), unsafe_allow_html=True)
 
                     # Weights UI (display now, allow user to adjust)
@@ -1743,15 +1764,33 @@ if all_events_data:
                         # Axes styling per metric
                         ax_m.set_title(label)
                         ax_m.set_yticks([])
-                        # Choose ticks based on value range
+                        # Choose ticks based on value range - more logical and more ticks
                         rng = vmax - vmin
-                        if rng <= 5:
-                            step = max(0.5, rng / 5.0)
+                        if rng <= 1:
+                            step = 0.1
+                        elif rng <= 5:
+                            step = 0.5
+                        elif rng <= 10:
+                            step = 1.0
                         elif rng <= 25:
-                            step = 5
+                            step = 2.5
+                        elif rng <= 50:
+                            step = 5.0
+                        elif rng <= 100:
+                            step = 10.0
                         else:
-                            step = round(rng / 5.0, -int(np.floor(np.log10(max(rng, 1)))) + 1)
-                        ticks = np.arange(vmin, vmax + 1e-9, step)
+                            step = 20.0
+                        
+                        # Generate ticks that include min and max
+                        ticks = []
+                        current = vmin
+                        while current <= vmax + 1e-9:
+                            ticks.append(current)
+                            current += step
+                        # Ensure max is included
+                        if ticks[-1] < vmax:
+                            ticks.append(vmax)
+                        
                         ax_m.set_xlim(left=vmin, right=vmax)
                         ax_m.set_xticks(ticks)
                         ax_m.grid(axis='x', alpha=0.15)
