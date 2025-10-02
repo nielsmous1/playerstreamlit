@@ -1733,73 +1733,91 @@ if all_events_data:
                     total_w = sum(weights.values())
                     norm_weights = {k: (w / total_w if total_w > 0 else 0.0) for k, w in weights.items()}
 
-                    # Individual distribution plots per metric (true-value axes)
+                    # Individual distribution plots per metric (true-value axes) - 2 per row
                     big3_teams = {"PSV", "Ajax", "Feyenoord"}
-                    for (label, key) in items:
-                        vals = distributions_local[key]
-                        vmin = float(min(vals)) if vals else 0.0
-                        vmax = float(max(vals)) if vals else 1.0
-                        if vmax <= vmin:
-                            vmax = vmin + 1.0
-                        fig_m, ax_m = plt.subplots(figsize=(8, 2.8))
-                        # Background bar spanning metric range
-                        ax_m.barh([0], [vmax - vmin], left=vmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
-                        # All dots for players in group
-                        x_vals = [float(v) for v in vals]
-                        ax_m.scatter(x_vals, [0] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
-                        # Competition average
-                        if vals:
-                            comp_avg = float(np.mean(x_vals))
-                            ax_m.vlines(comp_avg, -0.28, 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1)
-                        # Top 3 average
-                        big3_vals = []
-                        for nm, p in group_players:
-                            team_name = str(p.get('team', '') or '')
-                            if any(t.lower() in team_name.lower() for t in big3_teams):
-                                big3_vals.append(value_per96(p, key))
-                        if big3_vals:
-                            big3_avg = float(np.mean(big3_vals))
-                            ax_m.vlines(big3_avg, -0.28, 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
-                        # Selected player point
-                        if sel_stats and sel_stats.get('position_group') == effective_group:
-                            sel_val = value_per96(sel_stats, key)
-                            ax_m.scatter([sel_val], [0], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
-                        # Axes styling per metric
-                        ax_m.set_title(label)
-                        ax_m.set_yticks([])
-                        # Choose ticks based on value range - more logical and more ticks
-                        rng = vmax - vmin
-                        if rng <= 1:
-                            step = 0.1
-                        elif rng <= 5:
-                            step = 0.5
-                        elif rng <= 10:
-                            step = 1.0
-                        elif rng <= 25:
-                            step = 2.5
-                        elif rng <= 50:
-                            step = 5.0
-                        elif rng <= 100:
-                            step = 10.0
-                        else:
-                            step = 20.0
+                    
+                    # Create columns for 2 plots per row
+                    plot_items = list(items)
+                    for i in range(0, len(plot_items), 2):
+                        cols = st.columns(2)
                         
-                        # Generate ticks that include min and max
-                        ticks = []
-                        current = vmin
-                        while current <= vmax + 1e-9:
-                            ticks.append(current)
-                            current += step
-                        # Ensure max is included
-                        if ticks[-1] < vmax:
-                            ticks.append(vmax)
-                        
-                        ax_m.set_xlim(left=vmin, right=vmax)
-                        ax_m.set_xticks(ticks)
-                        ax_m.grid(axis='x', alpha=0.15)
-                        for spine in ["top", "right", "left", "bottom"]:
-                            ax_m.spines[spine].set_visible(False)
-                        st.pyplot(fig_m, use_container_width=True)
+                        for j, (label, key) in enumerate(plot_items[i:i+2]):
+                            with cols[j]:
+                                vals = distributions_local[key]
+                                vmin = float(min(vals)) if vals else 0.0
+                                vmax = float(max(vals)) if vals else 1.0
+                                if vmax <= vmin:
+                                    vmax = vmin + 1.0
+                                
+                                # Smaller, more compact figure
+                                fig_m, ax_m = plt.subplots(figsize=(4, 2.2))
+                                
+                                # Background bar spanning metric range
+                                ax_m.barh([0], [vmax - vmin], left=vmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
+                                
+                                # All dots for players in group
+                                x_vals = [float(v) for v in vals]
+                                ax_m.scatter(x_vals, [0] * len(x_vals), s=10, color="#8a8a8a", alpha=0.65, zorder=2)
+                                
+                                # Competition average
+                                if vals:
+                                    comp_avg = float(np.mean(x_vals))
+                                    ax_m.vlines(comp_avg, -0.25, 0.25, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.2, zorder=1)
+                                
+                                # Top 3 average
+                                big3_vals = []
+                                for nm, p in group_players:
+                                    team_name = str(p.get('team', '') or '')
+                                    if any(t.lower() in team_name.lower() for t in big3_teams):
+                                        big3_vals.append(value_per96(p, key))
+                                if big3_vals:
+                                    big3_avg = float(np.mean(big3_vals))
+                                    ax_m.vlines(big3_avg, -0.25, 0.25, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.2, zorder=1)
+                                
+                                # Selected player point
+                                if sel_stats and sel_stats.get('position_group') == effective_group:
+                                    sel_val = value_per96(sel_stats, key)
+                                    ax_m.scatter([sel_val], [0], s=60, color="#1f77b4", edgecolor="white", linewidth=0.6, zorder=3)
+                                
+                                # Axes styling per metric - more compact
+                                ax_m.set_title(label, fontsize=11, pad=8)
+                                ax_m.set_yticks([])
+                                
+                                # Choose ticks based on value range - fewer ticks for compactness
+                                rng = vmax - vmin
+                                if rng <= 1:
+                                    step = 0.2
+                                elif rng <= 5:
+                                    step = 1.0
+                                elif rng <= 10:
+                                    step = 2.0
+                                elif rng <= 25:
+                                    step = 5.0
+                                elif rng <= 50:
+                                    step = 10.0
+                                elif rng <= 100:
+                                    step = 20.0
+                                else:
+                                    step = 50.0
+                                
+                                # Generate ticks that include min and max
+                                ticks = []
+                                current = vmin
+                                while current <= vmax + 1e-9:
+                                    ticks.append(current)
+                                    current += step
+                                # Ensure max is included
+                                if ticks[-1] < vmax:
+                                    ticks.append(vmax)
+                                
+                                ax_m.set_xlim(left=vmin, right=vmax)
+                                ax_m.set_xticks(ticks)
+                                ax_m.tick_params(axis='x', labelsize=9)
+                                ax_m.grid(axis='x', alpha=0.15)
+                                for spine in ["top", "right", "left", "bottom"]:
+                                    ax_m.spines[spine].set_visible(False)
+                                
+                                st.pyplot(fig_m, use_container_width=True)
 
                 # Render all backs groups
                 for gname, items in backs_groups.items():
