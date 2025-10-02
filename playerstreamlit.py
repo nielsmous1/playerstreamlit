@@ -1963,7 +1963,7 @@ if all_events_data:
                 
                 # Layout: top row with player info and radar chart, bottom row with line chart
                 top_cols = st.columns([1, 2])
-                bottom_cols = st.columns([1, 2])
+                bottom_cols = st.columns([1, 3])
                 
                 # Top left: Player info and ratings
                 with top_cols[0]:
@@ -2090,7 +2090,7 @@ if all_events_data:
                             radar_plot_values = radar_values + radar_values[:1]
                             angles_plot = angles + angles[:1]
                             
-                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6, 6))
+                            fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(4, 4))
                             
                             # Plot each metric with its group color
                             for i, (angle, value, color) in enumerate(zip(angles, radar_values, metric_colors)):
@@ -2200,7 +2200,7 @@ if all_events_data:
                             
                             # Create line chart
                             if match_scores:
-                                fig_line, ax_line = plt.subplots(figsize=(12, 4))
+                                fig_line, ax_line = plt.subplots(figsize=(16, 4))
                                 
                                 # Plot the line
                                 ax_line.plot(range(len(match_scores)), match_scores, 
