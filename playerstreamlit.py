@@ -2170,6 +2170,25 @@ if all_events_data:
                                 match_stats = calculate_match_stats(events, selected_player_global)
                                 
                                 if match_stats:
+                                    # Determine opponent team and home/away status
+                                    player_team = stats.get('team', '')
+                                    opponent_name = "Opponent"
+                                    is_home = True
+                                    
+                                    # Parse match name to find opponent and determine home/away
+                                    if " vs " in match_name:
+                                        home_team, away_team = match_name.split(" vs ")
+                                        if home_team == player_team:
+                                            opponent_name = away_team
+                                            is_home = True  # Player's team is home
+                                        elif away_team == player_team:
+                                            opponent_name = home_team
+                                            is_home = False  # Player's team is away
+                                        else:
+                                            # If player team not found, use the other team
+                                            opponent_name = away_team if home_team == player_team else home_team
+                                            is_home = home_team == player_team
+                                    
                                     group_scores = {}
                                     
                                     for group_name, items in backs_groups.items():
@@ -2196,24 +2215,25 @@ if all_events_data:
                                     overall_score = sum(group_scores.values()) / len(group_scores) if group_scores else 50.0
                                     
                                     match_scores.append(overall_score)
-                                    match_names.append(match_name)
+                                    # Add (T) for home matches, (U) for away matches
+                                    home_away_indicator = "(T)" if is_home else "(U)"
+                                    match_names.append(f"{opponent_name} {home_away_indicator}")
                             
                             # Create line chart
                             if match_scores:
-                                fig_line, ax_line = plt.subplots(figsize=(20, 4))
+                                fig_line, ax_line = plt.subplots(figsize=(25, 4))
                                 
                                 # Plot the line
                                 ax_line.plot(range(len(match_scores)), match_scores, 
                                            marker='o', linewidth=2, markersize=6, color='#1f77b4')
                                 
                                 # Style the chart
-                                ax_line.set_xlabel('Match')
-                                ax_line.set_ylabel('Overall Score')
+                                
                                 ax_line.grid(True, alpha=0.3)
                                 
                                 # Set x-axis labels
                                 ax_line.set_xticks(range(len(match_names)))
-                                ax_line.set_xticklabels(match_names, rotation=45, ha='right')
+                                ax_line.set_xticklabels(match_names)
                                 
                                 # Set y-axis limits
                                 ax_line.set_ylim(0, 100)
