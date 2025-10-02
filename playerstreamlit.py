@@ -1590,15 +1590,25 @@ if all_events_data:
                     return float(v) * (96.0 / minutes) if minutes > 0 else 0.0
                 return float(v)
 
-            # Prepare distributions for chosen metrics
+            # Prepare distributions and min-max stats for chosen metrics (within selected group)
             metric_keys = [metrics_catalog[m] for m in selected_metrics]
             distributions = {k: [value_per96(p, k) for _, p in group_players] for k in metric_keys}
+            dist_minmax = {}
+            for k, vals in distributions.items():
+                if vals:
+                    vmin = float(min(vals))
+                    vmax = float(max(vals))
+                else:
+                    vmin = 0.0
+                    vmax = 0.0
+                dist_minmax[k] = (vmin, vmax)
 
-            def percentile_rank(values_list, target_value):
-                if not values_list:
-                    return 0.0
-                less_equal = sum(1 for v in values_list if v <= target_value)
-                return 100.0 * less_equal / len(values_list)
+            def percentile_minmax(values_minmax, target_value):
+                vmin, vmax = values_minmax
+                if vmax > vmin:
+                    return 100.0 * (float(target_value) - vmin) / (vmax - vmin)
+                # All equal; return 50 to avoid NaN and indicate mid
+                return 50.0
 
             # Table of percentiles
             rows = []
@@ -1607,11 +1617,11 @@ if all_events_data:
                     'Player': name,
                     'Team': p.get('team', ''),
                     'Position': p.get('position', ''),
-                    'Minutes': f"{p.get('minutes_played', 0):.0f}"
+                    'Minutes': float(p.get('minutes_played', 0) or 0)
                 }
                 for label, key in zip(selected_metrics, metric_keys):
                     val = value_per96(p, key)
-                    row[label] = f"{percentile_rank(distributions[key], val):.1f}" if show_percentile else f"{val:.2f}"
+                    row[label] = float(round(percentile_minmax(dist_minmax[key], val), 3)) if show_percentile else float(val)
                 rows.append(row)
 
             with right:
@@ -1627,8 +1637,13 @@ if all_events_data:
                     y_positions = np.arange(len(keys_display))
                     for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
                         values_raw = distributions[key]
-                        x_vals = [percentile_rank(values_raw, v) if show_percentile else v for v in values_raw]
-                        xmax = 100.0 if show_percentile else (max(values_raw) if values_raw else 1.0)
+                        if show_percentile:
+                            vmin, vmax = dist_minmax[key]
+                            x_vals = [percentile_minmax((vmin, vmax), v) for v in values_raw]
+                            xmax = 100.0
+                        else:
+                            x_vals = values_raw
+                            xmax = (max(values_raw) if values_raw else 1.0)
                         if not show_percentile and xmax == 0:
                             xmax = 1.0
                         y = y_positions[idx]
