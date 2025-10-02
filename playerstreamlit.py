@@ -1217,6 +1217,29 @@ if all_events_data:
             ]
         }
 
+        # Position groups mapping
+        POSITION_GROUPS = {
+            'Keepers': {'DM'},
+            'Centrale verdedigers': {'CV'},
+            'Backs': {'LV', 'RV', 'LVV', 'RVV'},
+            'Middenvelders': {'VM', 'CM', 'AM'},
+            'Vleugelspelers': {'LM', 'RM', 'LB', 'RB'},
+            'Spitsen': {'SP'}
+        }
+
+        def get_position_group(mapped_position: str):
+            if not mapped_position:
+                return 'Onbekend'
+            for group_name, positions in POSITION_GROUPS.items():
+                if mapped_position in positions:
+                    return group_name
+            return 'Onbekend'
+
+        # Attach position group to each valid player
+        for pname, pstats in valid_players.items():
+            mapped_pos = pstats.get('position', '')
+            pstats['position_group'] = get_position_group(mapped_pos)
+
         analysis_tab, dashboard_tab, percentiles_tab, dashboard2_tab = st.tabs(["Analysis", "Dashboard", "Percentiles", "Dashboard2"])
 
         with analysis_tab:
@@ -1558,29 +1581,6 @@ if all_events_data:
                     ax.set_title(f"{selected_player} - Radar{radar_suffix}")
                     st.pyplot(fig, use_container_width=True)
 
-        # Position groups mapping
-        POSITION_GROUPS = {
-            'Keepers': {'DM'},
-            'Centrale verdedigers': {'CV'},
-            'Backs': {'LV', 'RV', 'LVV', 'RVV'},
-            'Middenvelders': {'VM', 'CM', 'AM'},
-            'Vleugelspelers': {'LM', 'RM', 'LB', 'RB'},
-            'Spitsen': {'SP'}
-        }
-
-        def get_position_group(mapped_position: str):
-            if not mapped_position:
-                return 'Onbekend'
-            for group_name, positions in POSITION_GROUPS.items():
-                if mapped_position in positions:
-                    return group_name
-            return 'Onbekend'
-
-        # Attach position group to each valid player
-        for pname, pstats in valid_players.items():
-            mapped_pos = pstats.get('position', '')
-            pstats['position_group'] = get_position_group(mapped_pos)
-
         with percentiles_tab:
             st.subheader("Percentiles per 96 by Position Group")
 
@@ -1851,6 +1851,12 @@ if all_events_data:
             if selected_player_global:
                 stats = valid_players[selected_player_global]
                 position_group = stats.get('position_group', '')
+                
+                # Debug info
+                st.write(f"Debug - Player: {selected_player_global}")
+                st.write(f"Debug - Position: {stats.get('position', 'N/A')}")
+                st.write(f"Debug - Position Group: {position_group}")
+                st.write(f"Debug - Is Backs: {position_group == 'Backs'}")
                 
                 # Layout: top row with player info and radar chart
                 top_cols = st.columns([1, 2])
