@@ -890,6 +890,10 @@ if all_events_data:
                     'secondary_positions': position_minutes_summary.get(gk_name, {}).get('secondary_positions', ''),
                     'secondary_positions_minutes': position_minutes_summary.get(gk_name, {}).get('secondary_minutes', 0.0)
                 }
+            
+            # Add PSxG faced for all save attempts (both successful and unsuccessful)
+            # PSxG faced = 1 - xS for each save attempt
+            player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
 
         # Process progressive carries
         for pc in all_progressive_carries:
@@ -973,6 +977,161 @@ if all_events_data:
                 # Ignore malformed values
                 pass
 
+        # Process air duels, tackles, and interceptions
+        for ev in all_air_duel_totals:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'successful_crosses': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'air_duels_won': 0,
+                    'air_duels_total': 0,
+                    'air_duels_win_pct': 0.0,
+                    'successful_tackles': 0,
+                    'successful_interceptions': 0,
+                    'counter_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['air_duels_total'] = player_stats[pname].get('air_duels_total', 0) + 1
+
+        for ev in all_air_duel_wins:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'successful_crosses': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'air_duels_won': 0,
+                    'air_duels_total': 0,
+                    'air_duels_win_pct': 0.0,
+                    'successful_tackles': 0,
+                    'successful_interceptions': 0,
+                    'counter_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['air_duels_won'] = player_stats[pname].get('air_duels_won', 0) + 1
+
+        for ev in all_successful_tackles:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'successful_crosses': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'air_duels_won': 0,
+                    'air_duels_total': 0,
+                    'air_duels_win_pct': 0.0,
+                    'successful_tackles': 0,
+                    'successful_interceptions': 0,
+                    'counter_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['successful_tackles'] = player_stats[pname].get('successful_tackles', 0) + 1
+
+        for ev in all_successful_interceptions:
+            pname = ev['player']
+            if pname not in player_stats:
+                player_stats[pname] = {
+                    'team': ev['team'],
+                    'xG': 0.0,
+                    'xA': 0.0,
+                    'PSxG': 0.0,
+                    'shots': 0,
+                    'pbd': 0.0,
+                    'pbp': 0.0,
+                    'takeons': 0,
+                    'takeons_total': 0,
+                    'passes_to_box': 0,
+                    'keypasses': 0,
+                    'successful_crosses': 0,
+                    'successful_counter_pressures': 0,
+                    'successful_pressures': 0,
+                    'air_duels_won': 0,
+                    'air_duels_total': 0,
+                    'air_duels_win_pct': 0.0,
+                    'successful_tackles': 0,
+                    'successful_interceptions': 0,
+                    'counter_pressures': 0,
+                    'progressive_carries': 0,
+                    'progressive_passes': 0,
+                    'goals_prevented': 0.0,
+                    'psxg_faced': 0.0,
+                    'goals_allowed': 0,
+                    'minutes_played': total_player_minutes.get(pname, 0),
+                    'position': primary_positions_by_player.get(pname, 'N/A'),
+                    'primary_position_minutes': position_minutes_summary.get(pname, {}).get('primary_minutes', 0.0),
+                    'secondary_positions': position_minutes_summary.get(pname, {}).get('secondary_positions', ''),
+                    'secondary_positions_minutes': position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
+                }
+            player_stats[pname]['successful_interceptions'] = player_stats[pname].get('successful_interceptions', 0) + 1
+
+        # Compute air duel win percentage
+        for pname, stats in player_stats.items():
+            total_duels = stats.get('air_duels_total', 0)
+            wins = stats.get('air_duels_won', 0)
+            stats['air_duels_win_pct'] = (100.0 * wins / total_duels) if total_duels > 0 else 0.0
+
         # Ensure all players present in stats have position-minute summaries (in case created before summaries)
         for pname, stats in player_stats.items():
             if 'primary_position_minutes' not in stats:
@@ -981,10 +1140,6 @@ if all_events_data:
                 stats['secondary_positions'] = position_minutes_summary.get(pname, {}).get('secondary_positions', '')
             if 'secondary_positions_minutes' not in stats:
                 stats['secondary_positions_minutes'] = position_minutes_summary.get(pname, {}).get('secondary_minutes', 0.0)
-            
-            # Add PSxG faced for all save attempts (both successful and unsuccessful)
-            # PSxG faced = 1 - xS for each save attempt
-            player_stats[gk_name]['psxg_faced'] += (1.0 - gk_event['xs'])
         
         # Count goals allowed by grouping unsuccessful saves per goalkeeper
         unsuccessful_saves_by_gk = {}
