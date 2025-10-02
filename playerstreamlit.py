@@ -1279,17 +1279,73 @@ if all_events_data:
                 'successful_interceptions': 0.0
             }
             
-            # Calculate stats for this match (simplified - you might want to use the full calculation)
-            # This is a placeholder - in practice you'd calculate all the metrics for this specific match
-            # For now, we'll use random values as a demonstration
-            import random
-            for key in match_stats:
-                if key != 'minutes_played':
-                    match_stats[key] = random.uniform(0, 10)  # Placeholder values
+            # Calculate actual stats for this match
+            # Find events for this specific player
+            player_events = [e for e in events if e.get('playerId') == player_name]
+            
+            # Calculate PBD (Progressive Ball Distance)
+            dribble_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('resultId') == 1]
+            match_stats['pbd'] = sum(e.get('metrics', {}).get('pbd', 0) for e in dribble_events)
+            
+            # Calculate Progressive Carries
+            carry_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('resultId') == 1 and 119 in e.get('labels', [])]
+            match_stats['progressive_carries'] = len(carry_events)
+            
+            # Calculate Take-ons
+            takeon_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('resultId') == 1 and e.get('labels') and (120 in e.get('labels', []) or 121 in e.get('labels', []))]
+            match_stats['takeons'] = len(takeon_events)
+            
+            # Calculate Take-on success percentage
+            all_takeon_attempts = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('labels') and (120 in e.get('labels', []) or 121 in e.get('labels', []))]
+            successful_takeons = [e for e in all_takeon_attempts if e.get('resultId') == 1]
+            match_stats['takeon_success_pct'] = (len(successful_takeons) / len(all_takeon_attempts) * 100) if all_takeon_attempts else 0.0
+            
+            # Calculate PBP (Progressive Ball Progression by Passes)
+            pass_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 1 and e.get('resultId') == 1]
+            match_stats['pbp'] = sum(e.get('metrics', {}).get('goalProgression', 0) for e in pass_events)
+            
+            # Calculate Progressive Passes
+            progressive_pass_events = [e for e in pass_events if e.get('metrics', {}).get('goalProgression', 0) < -10]
+            match_stats['progressive_passes'] = len(progressive_pass_events)
+            
+            # Calculate xA
+            match_stats['xA'] = sum(e.get('metrics', {}).get('xA', 0) for e in pass_events)
+            
+            # Calculate Successful Crosses
+            cross_events = [e for e in pass_events if 101 in e.get('labels', [])]
+            match_stats['successful_crosses'] = len(cross_events)
+            
+            # Calculate Key Passes
+            key_pass_events = [e for e in pass_events if 82 in e.get('labels', [])]
+            match_stats['keypasses'] = len(key_pass_events)
+            
+            # Calculate xG
+            shot_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('resultId') == 1 and e.get('labels') and 16 in e.get('labels', [])]
+            match_stats['xG'] = sum(e.get('metrics', {}).get('xG', 0) for e in shot_events)
+            
+            # Calculate Passes to Box
+            passes_to_box_events = [e for e in pass_events if 72 in e.get('labels', [])]
+            match_stats['passes_to_box'] = len(passes_to_box_events)
+            
+            # Calculate Air Duels Won
+            air_duel_events = [e for e in player_events if e.get('baseTypeId') == 4 and e.get('subTypeId') == 402 and e.get('resultId') == 1]
+            match_stats['air_duels_won'] = len(air_duel_events)
+            
+            # Calculate Air Duels Win Percentage
+            all_air_duel_events = [e for e in player_events if e.get('baseTypeId') == 4 and e.get('subTypeId') == 402]
+            match_stats['air_duels_win_pct'] = (len(air_duel_events) / len(all_air_duel_events) * 100) if all_air_duel_events else 0.0
+            
+            # Calculate Successful Tackles
+            tackle_events = [e for e in player_events if e.get('baseTypeId') == 4 and e.get('subTypeId') == 400 and e.get('resultId') == 1]
+            match_stats['successful_tackles'] = len(tackle_events)
+            
+            # Calculate Successful Interceptions
+            interception_events = [e for e in player_events if e.get('baseTypeId') == 5 and e.get('subTypeId') == 500]
+            match_stats['successful_interceptions'] = len(interception_events)
             
             # Convert to per-96 minutes
             for key in match_stats:
-                if key != 'minutes_played':
+                if key != 'minutes_played' and key != 'takeon_success_pct' and key != 'air_duels_win_pct':
                     match_stats[key] = match_stats[key] * (96.0 / minutes) if minutes > 0 else 0.0
             
             return match_stats
