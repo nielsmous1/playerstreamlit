@@ -2160,7 +2160,6 @@ if all_events_data:
                             match_names = []
                             
                             # Pre-calculate all players' per-96 stats for the season (for comparison)
-                            # We'll use the same distributions as the main percentile tab
                             season_per96_stats = {}
                             for pname, pstats in valid_players.items():
                                 if pstats.get('position_group') == position_group:
@@ -2168,13 +2167,6 @@ if all_events_data:
                                     for group_name, items in backs_groups.items():
                                         for _, key in items:
                                             season_per96_stats[pname][key] = get_value_per96(pstats, key)
-                            
-                            # Create distributions for each metric (same as percentile tab)
-                            distributions_local = {}
-                            for group_name, items in backs_groups.items():
-                                for _, key in items:
-                                    all_values = [get_value_per96(pstats, key) for pstats in season_per96_stats.values()]
-                                    distributions_local[key] = all_values
                             
                             for match_name, date, events in player_matches:
                                 # Calculate player stats for this specific match
@@ -2190,9 +2182,13 @@ if all_events_data:
                                         for _, key in items:
                                             val = match_stats.get(key, 0.0)
                                             
-                                            # Calculate percentile rank for this metric using the same distribution as percentile tab
-                                            if key in distributions_local and distributions_local[key]:
-                                                pct = calculate_percentile_rank(distributions_local[key], val)
+                                            # Calculate percentile rank for this metric across all players in the season
+                                            all_values = []
+                                            for pname, pstats in season_per96_stats.items():
+                                                all_values.append(pstats.get(key, 0.0))
+                                            
+                                            if all_values:
+                                                pct = calculate_percentile_rank(all_values, val)
                                                 group_total += pct
                                                 group_count += 1
                                         
