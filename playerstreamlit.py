@@ -1754,9 +1754,6 @@ if all_events_data:
                                 # Smaller, more compact figure
                                 fig_m, ax_m = plt.subplots(figsize=(4, 2.2))
                                 
-                                # Background bar spanning metric range
-                                ax_m.barh([0], [vmax - vmin], left=vmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
-                                
                                 # All dots for players in group
                                 x_vals = [float(v) for v in vals]
                                 ax_m.scatter(x_vals, [0] * len(x_vals), s=10, color="#8a8a8a", alpha=0.65, zorder=2)
@@ -1819,9 +1816,16 @@ if all_events_data:
                                 # Generate ticks
                                 ticks = []
                                 current = start_tick
-                                while current <= vmax + step:  # Go one step beyond max
-                                    ticks.append(current)
-                                    current += step
+                                
+                                # Special case: if range is 0-100 (percentage), don't go beyond 100
+                                if vmin >= 0 and vmax <= 100 and rng >= 80:
+                                    while current <= vmax:  # Stop at max for percentage ranges
+                                        ticks.append(current)
+                                        current += step
+                                else:
+                                    while current <= vmax + step:  # Go one step beyond max for other ranges
+                                        ticks.append(current)
+                                        current += step
                                 
                                 # Remove ticks that are too far above max
                                 ticks = [t for t in ticks if t <= vmax + step]
@@ -1954,7 +1958,7 @@ if all_events_data:
                     else:
                         st.info("Radar chart only available for Backs position group")
                 
-                # Bottom: Metric group scores (using weights from percentiles tab)
+                # Bottom: Metric group scores (independent calculation with equal weights)
                 st.markdown("---")
                 st.markdown("**Metric Group Scores**")
                 
@@ -1966,14 +1970,13 @@ if all_events_data:
                     
                     for i, (group_name, items) in enumerate(group_metrics.items()):
                         with score_cols[i]:
-                            # Calculate group rating using the same logic as percentiles tab
+                            # Calculate group rating independently with equal weights
                             group_players = [(name, p) for name, p in valid_players.items() 
                                            if p.get('position_group') == position_group]
                             
                             if group_players:
                                 # Get distributions for this group
                                 distributions_local = {}
-                                minmax_local = {}
                                 
                                 for _, key in items:
                                     vals = []
@@ -1981,16 +1984,15 @@ if all_events_data:
                                         val = get_value_per96(p, key)
                                         vals.append(val)
                                     distributions_local[key] = vals
-                                    minmax_local[key] = (min(vals) if vals else 0.0, max(vals) if vals else 1.0)
                                 
-                                # Calculate group rating (weighted average of percentiles)
+                                # Calculate group rating using equal weights for all metrics
                                 group_total = 0
                                 group_count = 0
                                 
                                 for _, key in items:
                                     val = get_value_per96(stats, key)
                                     pct = calculate_percentile_rank(distributions_local[key], val)
-                                    group_total += pct
+                                    group_total += pct  # Equal weight (1.0) for all metrics
                                     group_count += 1
                                 
                                 group_rating = (group_total / group_count) if group_count > 0 else 50.0
