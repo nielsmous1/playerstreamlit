@@ -2094,29 +2094,29 @@ if all_events_data:
                             
                             # Plot each metric with its group color
                             for i, (angle, value, color) in enumerate(zip(angles, radar_values, metric_colors)):
-                                ax.plot([angle, angle], [0, value], color=color, linewidth=3, alpha=0.8)
-                                ax.scatter([angle], [value], color=color, s=50, zorder=5)
+                                ax.plot([angle, angle], [0, value], color=color, linewidth=1.5, alpha=0.8)
+                                ax.scatter([angle], [value], color=color, s=20, zorder=5)
                             
                             # Connect the dots
-                            ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=1, alpha=0.3)
+                            ax.plot(angles_plot, radar_plot_values, color='#333333', linewidth=0.5, alpha=0.3)
                             ax.fill(angles_plot, radar_plot_values, color='#333333', alpha=0.1)
                             
                             ax.set_theta_offset(np.pi / 2)
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
                             ax.set_xticks(angles)
-                            ax.set_xticklabels(radar_labels, fontsize=6)
+                            ax.set_xticklabels(radar_labels, fontsize=4)
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
-                            ax.set_yticklabels(["20", "40", "60", "80", "100"])
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=4)
                             # Keep the inner grid, remove only the outer circle
                             ax.grid(True, alpha=0.2)
-                            ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=12, pad=20)
+                            ax.set_title(f"{selected_player_global} - Performance by Metric Group", fontsize=6, pad=10)
                             
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
-                                                        lw=3, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0))
+                                                        lw=1.5, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=4)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
