@@ -1281,7 +1281,7 @@ if all_events_data:
             
             # Calculate actual stats for this match
             # Find events for this specific player
-            player_events = [e for e in events if e.get('playerId') == player_name]
+            player_events = [e for e in events if e.get('playerName') == player_name]
             
             # Calculate PBD (Progressive Ball Distance)
             dribble_events = [e for e in player_events if e.get('baseTypeId') == 1 and e.get('subTypeId') == 10 and e.get('resultId') == 1]
@@ -2173,7 +2173,6 @@ if all_events_data:
                                 match_stats = calculate_match_stats(events, selected_player_global)
                                 
                                 if match_stats:
-                                    # Calculate group scores for this match using percentile rankings
                                     group_scores = {}
                                     
                                     for group_name, items in backs_groups.items():
