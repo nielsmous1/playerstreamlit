@@ -1670,48 +1670,64 @@ if all_events_data:
                             vmin = 0.0; vmax = 0.0
                         minmax_local[k] = (vmin, vmax)
 
-                    # Weights UI
+                    # Weights (compute first, display later)
                     cols = st.columns(len(items))
-                    weights = {}
-                    for (label, key), c in zip(items, cols):
+                    weights = {key: 1.0 for _, key in items}
+                    total_w = sum(weights.values())
+                    norm_weights = {k: (w / total_w if total_w > 0 else 0.0) for k, w in weights.items()}
+
+                    # Overall rating badge (using current weights)
+                    rating_value = None
+                    sel_stats = valid_players.get(selected_player_global)
+                    if sel_stats and sel_stats.get('position_group') == effective_group:
+                        parts = []
+                        for _, key in items:
+                            val = value_per96(sel_stats, key)
+                            pct = percentile_minmax(minmax_local[key], val)
+                            parts.append(pct * norm_weights[key])
+                        rating_value = max(0.0, min(100.0, sum(parts)))
+                    if rating_value is not None:
+                        st.markdown(badge(group_name, rating_value, is_pct=True), unsafe_allow_html=True)
+
+                    # Per-metric percentile badges for selected player
+                    sel_stats = valid_players.get(selected_player_global)
+                    if sel_stats and sel_stats.get('position_group') == effective_group:
+                        cols_pct = st.columns(len(items))
+                        for (label, key), c in zip(items, cols_pct):
+                            with c:
+                                vmin, vmax = minmax_local[key]
+                                val = value_per96(sel_stats, key)
+                                pct = percentile_minmax((vmin, vmax), val)
+                                pct = max(0.0, min(100.0, pct))
+                                st.markdown(badge(label, pct, is_pct=True), unsafe_allow_html=True)
+
+                    # Weights UI (display now, allow user to adjust)
+                    cols_w = st.columns(len(items))
+                    for (label, key), c in zip(items, cols_w):
                         with c:
                             weights[key] = st.slider(f"{label} weight", 0.0, 2.0, 1.0, 0.1)
-                    # Normalize weights to sum to 1 if any > 0
                     total_w = sum(weights.values())
-                    if total_w <= 0:
-                        norm_weights = {k: 0.0 for k in weights}
-                    else:
-                        norm_weights = {k: w / total_w for k, w in weights.items()}
+                    norm_weights = {k: (w / total_w if total_w > 0 else 0.0) for k, w in weights.items()}
 
-                    # Distribution plot: per-metric true-value axes
-                    fig, ax = plt.subplots(figsize=(8, 5))
-                    metrics_display = [label for label, _ in items][::-1]
-                    keys_display = metrics_keys_local[::-1]
-                    y_positions = np.arange(len(keys_display))
+                    # Individual distribution plots per metric (true-value axes)
                     big3_teams = {"PSV", "Ajax", "Feyenoord"}
-                    # Precompute min-max per metric
-                    mm_local = {}
-                    for key in keys_display:
+                    for (label, key) in items:
                         vals = distributions_local[key]
-                        if vals:
-                            vmin = float(min(vals)); vmax = float(max(vals))
-                        else:
-                            vmin = 0.0; vmax = 0.0
-                        mm_local[key] = (vmin, vmax)
-                    for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
-                        vals = distributions_local[key]
-                        vmin, vmax = mm_local[key]
+                        vmin = float(min(vals)) if vals else 0.0
+                        vmax = float(max(vals)) if vals else 1.0
+                        if vmax <= vmin:
+                            vmax = vmin + 1.0
+                        fig_m, ax_m = plt.subplots(figsize=(8, 2.8))
+                        # Background bar spanning metric range
+                        ax_m.barh([0], [vmax - vmin], left=vmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
+                        # All dots for players in group
                         x_vals = [float(v) for v in vals]
-                        xmin = vmin; xmax = vmax
-                        y = y_positions[idx]
-                        ax.barh(y, (xmax - xmin) if xmax > xmin else 1.0, left=xmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
-                        # No jitter: plot dots on a straight line
-                        ax.scatter(x_vals, [y] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
-                        # competition average (within group)
+                        ax_m.scatter(x_vals, [0] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
+                        # Competition average
                         if vals:
                             comp_avg = float(np.mean(x_vals))
-                            ax.vlines(comp_avg, y - 0.28, y + 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1)
-                        # top3 average within group
+                            ax_m.vlines(comp_avg, -0.28, 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1)
+                        # Top 3 average
                         big3_vals = []
                         for nm, p in group_players:
                             team_name = str(p.get('team', '') or '')
@@ -1719,47 +1735,29 @@ if all_events_data:
                                 big3_vals.append(value_per96(p, key))
                         if big3_vals:
                             big3_avg = float(np.mean(big3_vals))
-                            ax.vlines(big3_avg, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
-                        # highlight selected player
-                        sel_stats = valid_players.get(selected_player_global)
+                            ax_m.vlines(big3_avg, -0.28, 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
+                        # Selected player point
                         if sel_stats and sel_stats.get('position_group') == effective_group:
                             sel_val = value_per96(sel_stats, key)
-                            ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
-                    ax.set_yticks(y_positions); ax.set_yticklabels(metrics_display)
-                    # Per-metric x axis: overall min/max across metrics
-                    global_min = min((mm_local[k][0] for k in keys_display), default=0.0)
-                    global_max = max((mm_local[k][1] for k in keys_display), default=1.0)
-                    if global_max <= global_min:
-                        global_max = global_min + 1.0
-                    ax.set_xlim(left=global_min, right=global_max)
-                    # Ticks based on range
-                    rng = global_max - global_min
-                    if rng <= 5:
-                        step = max(0.5, rng / 5.0)
-                    elif rng <= 25:
-                        step = 5
-                    else:
-                        step = round(rng / 5.0, -int(np.floor(np.log10(max(rng, 1)))) + 1)
-                    ticks = np.arange(global_min, global_max + 1e-9, step)
-                    ax.set_xticks(ticks)
-                    ax.invert_yaxis(); ax.grid(axis='x', alpha=0.15)
-                    for spine in ["top", "right", "left", "bottom"]:
-                        ax.spines[spine].set_visible(False)
-                    st.pyplot(fig, use_container_width=True)
-
-                    # Show percentile per metric as colored badges
-                    sel_stats = valid_players.get(selected_player_global)
-                    if sel_stats and sel_stats.get('position_group') == effective_group:
-                        cols_pct = st.columns(len(items))
-                        for (label, key), c in zip(items, cols_pct):
-                            with c:
-                                vmin, vmax = mm_local[key]
-                                val = value_per96(sel_stats, key)
-                                pct = percentile_minmax((vmin, vmax), val)
-                                pct = max(0.0, min(100.0, pct))
-                                st.markdown(badge(label, pct, is_pct=True), unsafe_allow_html=True)
-
-                    # Removed per-match rating graphs per request
+                            ax_m.scatter([sel_val], [0], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
+                        # Axes styling per metric
+                        ax_m.set_title(label)
+                        ax_m.set_yticks([])
+                        # Choose ticks based on value range
+                        rng = vmax - vmin
+                        if rng <= 5:
+                            step = max(0.5, rng / 5.0)
+                        elif rng <= 25:
+                            step = 5
+                        else:
+                            step = round(rng / 5.0, -int(np.floor(np.log10(max(rng, 1)))) + 1)
+                        ticks = np.arange(vmin, vmax + 1e-9, step)
+                        ax_m.set_xlim(left=vmin, right=vmax)
+                        ax_m.set_xticks(ticks)
+                        ax_m.grid(axis='x', alpha=0.15)
+                        for spine in ["top", "right", "left", "bottom"]:
+                            ax_m.spines[spine].set_visible(False)
+                        st.pyplot(fig_m, use_container_width=True)
 
                 # Render all backs groups
                 for gname, items in backs_groups.items():
