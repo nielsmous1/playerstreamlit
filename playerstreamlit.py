@@ -1786,17 +1786,17 @@ if all_events_data:
                                 base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
                                 # Dribbles/PBD and progressive carries
                                 if base == 3 and sub == 300 and result == 1:
-                                        gp = ev.get('metrics', {}).get('goalProgression', 0.0) or 0.0
-                                        if gp < 0:
-                                            if any(k == 'pbd' for _, k in items):
-                                                per_match_vals['pbd'] = per_match_vals.get('pbd', 0.0) + abs(gp)
-                                        if 119 in labels and any(k == 'progressive_carries' for _, k in items):
-                                            per_match_vals['progressive_carries'] = per_match_vals.get('progressive_carries', 0.0) + 1
-                                    # Take-ons from labels 120/121 handled in preprocessing; approximate via labels here
-                                    if 120 in labels and any(k == 'takeons' for _, k in items):
-                                        # count successful take-ons only if 121 also present
-                                        if 121 in labels:
-                                            per_match_vals['takeons'] = per_match_vals.get('takeons', 0.0) + 1
+                                    gp = ev.get('metrics', {}).get('goalProgression', 0.0) or 0.0
+                                    if gp < 0:
+                                        if any(k == 'pbd' for _, k in items):
+                                            per_match_vals['pbd'] = per_match_vals.get('pbd', 0.0) + abs(gp)
+                                    if 119 in labels and any(k == 'progressive_carries' for _, k in items):
+                                        per_match_vals['progressive_carries'] = per_match_vals.get('progressive_carries', 0.0) + 1
+                                # Take-ons from labels 120/121 handled in preprocessing; approximate via labels here
+                                if 120 in labels and any(k == 'takeons' for _, k in items):
+                                    # count successful take-ons only if 121 also present
+                                    if 121 in labels:
+                                        per_match_vals['takeons'] = per_match_vals.get('takeons', 0.0) + 1
                                     # Passes and progression by passes/key passes/crosses/xA
                                     if (('pass' in str(ev.get('baseTypeName', '')).lower()) or base == 2) and result == 1:
                                         gp = ev.get('metrics', {}).get('goalProgression', None)
