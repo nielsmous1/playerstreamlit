@@ -1596,8 +1596,14 @@ if all_events_data:
             # Percentile helper (min-max within a given (vmin, vmax))
             def percentile_minmax(values_minmax, target_value):
                 vmin, vmax = values_minmax
+                # Guard against invalid ranges and clamp
                 if vmax > vmin:
-                    return 100.0 * (float(target_value) - vmin) / (vmax - vmin)
+                    tv = float(target_value)
+                    if tv < vmin:
+                        tv = vmin
+                    elif tv > vmax:
+                        tv = vmax
+                    return 100.0 * (tv - vmin) / (vmax - vmin)
                 # All equal; return 50 to avoid NaN and indicate mid
                 return 50.0
 
@@ -1677,28 +1683,37 @@ if all_events_data:
                     else:
                         norm_weights = {k: w / total_w for k, w in weights.items()}
 
-                    # Distribution plot of true values with averages and highlight selected player
+                    # Distribution plot: rescale each metric to full width (0..100)
                     fig, ax = plt.subplots(figsize=(8, 5))
                     metrics_display = [label for label, _ in items][::-1]
                     keys_display = metrics_keys_local[::-1]
                     y_positions = np.arange(len(keys_display))
                     big3_teams = {"PSV", "Ajax", "Feyenoord"}
-                    # global x-range across metrics in this group (true values, not percentiles)
-                    group_xmax = 1.0
+                    # Precompute min-max per metric
+                    mm_local = {}
                     for key in keys_display:
                         vals = distributions_local[key]
                         if vals:
-                            group_xmax = max(group_xmax, float(max(vals)))
+                            vmin = float(min(vals)); vmax = float(max(vals))
+                        else:
+                            vmin = 0.0; vmax = 0.0
+                        mm_local[key] = (vmin, vmax)
                     for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
                         vals = distributions_local[key]
-                        x_vals = vals
-                        xmax = group_xmax
+                        vmin, vmax = mm_local[key]
+                        # Scale to 0..100 (full width) for display
+                        x_vals = []
+                        if vmax > vmin:
+                            x_vals = [100.0 * (float(v) - vmin) / (vmax - vmin) for v in vals]
+                        else:
+                            x_vals = [50.0 for _ in vals]
+                        xmax = 100.0
                         y = y_positions[idx]
                         ax.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
                         # No jitter: plot dots on a straight line
                         ax.scatter(x_vals, [y] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
                         # competition average (within group)
-                        if x_vals:
+                        if vals:
                             comp_avg = float(np.mean(x_vals))
                             ax.vlines(comp_avg, y - 0.28, y + 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1)
                         # top3 average within group
@@ -1708,17 +1723,25 @@ if all_events_data:
                             if any(t.lower() in team_name.lower() for t in big3_teams):
                                 big3_vals.append(value_per96(p, key))
                         if big3_vals:
-                            big3_avg = float(np.mean(big3_vals))
+                            # scale big3 avg to 0..100
+                            if vmax > vmin:
+                                big3_avg = 100.0 * (float(np.mean(big3_vals)) - vmin) / (vmax - vmin)
+                            else:
+                                big3_avg = 50.0
                             ax.vlines(big3_avg, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
                         # highlight selected player
                         sel_stats = valid_players.get(selected_player_global)
                         if sel_stats and sel_stats.get('position_group') == effective_group:
-                            sel_val = value_per96(sel_stats, key)
+                            sel_val_raw = value_per96(sel_stats, key)
+                            if vmax > vmin:
+                                sel_val = 100.0 * (sel_val_raw - vmin) / (vmax - vmin)
+                            else:
+                                sel_val = 50.0
                             ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
                     ax.set_yticks(y_positions); ax.set_yticklabels(metrics_display)
-                    ax.set_xlim(left=0, right=group_xmax)
-                    # Add ticks for each bar baseline
-                    ax.set_xticks(np.linspace(0, group_xmax, num=6))
+                    ax.set_xlim(left=0, right=100.0)
+                    # Add ticks for each bar baseline (0..100)
+                    ax.set_xticks([0, 20, 40, 60, 80, 100])
                     ax.invert_yaxis(); ax.grid(axis='x', alpha=0.15)
                     for spine in ["top", "right", "left", "bottom"]:
                         ax.spines[spine].set_visible(False)
@@ -1735,7 +1758,8 @@ if all_events_data:
                             parts.append(pct * norm_weights[key])
                         rating_value = sum(parts)
                     if rating_value is not None:
-                        # Show rating in a colored badge next to title
+                        # Clamp rating and show in colored badge next to title
+                        rating_value = max(0.0, min(100.0, rating_value))
                         badge_html = badge(group_name, rating_value, is_pct=True)
                         st.markdown(badge_html, unsafe_allow_html=True)
 
@@ -1749,6 +1773,8 @@ if all_events_data:
                             # compute minutes for player in this match
                             match_minutes_map = calculate_player_minutes(events)
                             minutes = float(match_minutes_map.get(selected_player_global, 0))
+                            if minutes <= 0:
+                                continue
                             # per-match metric values
                             per_match_vals = {k: 0.0 for _, k in items}
                             # iterate events to fill values
@@ -1816,17 +1842,35 @@ if all_events_data:
                                         v = v * (96.0 / minutes) if minutes > 0 else 0.0
                                     pct = percentile_minmax(minmax_local[key], v)
                                     parts.append(pct * norm_weights[key])
-                                rating_match = sum(parts)
-                                # x-axis label as match index
-                                series_x.append(match_idx + 1)
+                                rating_match = max(0.0, min(100.0, sum(parts)))
+                                # x-axis label as match index with date/opponent
+                                # Derive label from file name
+                                label_txt = str(match_idx + 1)
+                                try:
+                                    fname = file_names[match_idx] if match_idx < len(file_names) else ""
+                                    home, away, date_part = parse_teams_from_filename(fname)
+                                    # Decide opponent vs fixture
+                                    sel_team = str(sel_stats.get('team', '') or '')
+                                    if home and away:
+                                        opponent = away if sel_team.lower() in (home or '').lower() else home
+                                    else:
+                                        opponent = "?"
+                                    label_txt = f"{date_part or ''} vs {opponent}"
+                                except Exception:
+                                    pass
+                                series_x.append(label_txt)
                                 series_y.append(rating_match)
                             # plot line chart
                             fig_s, ax_s = plt.subplots(figsize=(8, 3))
-                            ax_s.plot(series_x, series_y, marker='o', color="#1f77b4")
+                            ax_s.plot(range(len(series_x)), series_y, marker='o', color="#1f77b4")
                             ax_s.set_title(f"{group_name} rating per match - {selected_player_global}")
-                            ax_s.set_xlabel("Match #")
+                            ax_s.set_xlabel("Match")
                             ax_s.set_ylabel("Rating (0-100)")
                             ax_s.grid(alpha=0.2)
+                            # show labels as xticks if not too many
+                            if len(series_x) <= 16:
+                                ax_s.set_xticks(range(len(series_x)))
+                                ax_s.set_xticklabels(series_x, rotation=45, ha='right')
                             st.pyplot(fig_s, use_container_width=True)
 
                 # Render all backs groups
