@@ -2159,6 +2159,15 @@ if all_events_data:
                             match_scores = []
                             match_names = []
                             
+                            # Pre-calculate all players' per-96 stats for the season (for comparison)
+                            season_per96_stats = {}
+                            for pname, pstats in valid_players.items():
+                                if pstats.get('position_group') == position_group:
+                                    season_per96_stats[pname] = {}
+                                    for group_name, items in backs_groups.items():
+                                        for _, key in items:
+                                            season_per96_stats[pname][key] = get_value_per96(pstats, key)
+                            
                             for match_name, date, events in player_matches:
                                 # Calculate player stats for this specific match
                                 match_stats = calculate_match_stats(events, selected_player_global)
@@ -2176,9 +2185,8 @@ if all_events_data:
                                             
                                             # Calculate percentile rank for this metric across all players in the season
                                             all_values = []
-                                            for _, p in valid_players.items():
-                                                if p.get('position_group') == position_group:
-                                                    all_values.append(p.get(key, 0.0))
+                                            for pname, pstats in season_per96_stats.items():
+                                                all_values.append(pstats.get(key, 0.0))
                                             
                                             if all_values:
                                                 pct = calculate_percentile_rank(all_values, val)
