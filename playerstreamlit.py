@@ -1704,8 +1704,9 @@ if all_events_data:
                         rating_value = max(0.0, min(100.0, sum(parts)))
                     if rating_value is not None:
                         # Larger overall rating without percentage sign
+                        color = _rating_color(rating_value)
                         st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, {_rating_color(rating_value)}, {_rating_color(rating_value, alpha=0.7)}); 
+                        <div style="background: {color}; 
                                     color: white; padding: 12px 20px; border-radius: 8px; text-align: center; 
                                     font-size: 18px; font-weight: bold; margin: 10px 0;">
                             {group_name}: {rating_value:.1f}
