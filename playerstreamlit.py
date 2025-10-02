@@ -1568,8 +1568,20 @@ if all_events_data:
 
             left, right = st.columns([2, 3])
             with left:
+                # Player selection (searchable) and auto-position group detection
+                player_options = sorted(list(valid_players.keys()))
+                player_options_with_none = ["(none)"] + player_options
+                selected_player_search = st.selectbox("Select player (optional)", options=player_options_with_none, index=0)
+
                 pos_groups = list(POSITION_GROUPS.keys())
-                selected_group = st.selectbox("Position group", options=pos_groups)
+                # Default to player's group if selected
+                if selected_player_search != "(none)":
+                    player_group_auto = valid_players.get(selected_player_search, {}).get('position_group', 'Onbekend')
+                    selected_group = st.selectbox("Position group", options=pos_groups, index=max(0, pos_groups.index(player_group_auto) if player_group_auto in pos_groups else 0))
+                    st.caption(f"Using group '{selected_group}' based on {selected_player_search}'s primary position" if player_group_auto in pos_groups else "Select a position group")
+                else:
+                    selected_group = st.selectbox("Position group", options=pos_groups)
+
                 selected_metrics = st.multiselect(
                     "Select metrics",
                     options=list(metrics_catalog.keys()),
@@ -1578,8 +1590,13 @@ if all_events_data:
                 per96 = st.checkbox("Per 96 minutes", value=True)
                 show_percentile = st.checkbox("Show percentiles (0-100)", value=True)
 
-            # Build dataset for the selected group
-            group_players = [(name, p) for name, p in valid_players.items() if p.get('position_group') == selected_group]
+            # Build dataset for the selected group (override to player's group if selected)
+            effective_group = selected_group
+            if selected_player_search != "(none)":
+                auto_group = valid_players.get(selected_player_search, {}).get('position_group', None)
+                if auto_group in POSITION_GROUPS:
+                    effective_group = auto_group
+            group_players = [(name, p) for name, p in valid_players.items() if p.get('position_group') == effective_group]
             # Compute per-96 values where applicable
             def value_per96(pstats, key):
                 v = pstats.get(key, 0.0)
@@ -1625,7 +1642,16 @@ if all_events_data:
                 rows.append(row)
 
             with right:
-                st.dataframe(rows, use_container_width=True, hide_index=True)
+                # Build dynamic column config: Minutes no decimals, metrics 2 decimals
+                col_config = {
+                    'Player': st.column_config.TextColumn('Player', width='medium'),
+                    'Team': st.column_config.TextColumn('Team', width='small'),
+                    'Position': st.column_config.TextColumn('Position', width='small'),
+                    'Minutes': st.column_config.NumberColumn('Minutes', width='small', format='%.0f')
+                }
+                for label in selected_metrics:
+                    col_config[label] = st.column_config.NumberColumn(label, width='small', format='%.2f')
+                st.dataframe(rows, use_container_width=True, hide_index=True, column_config=col_config)
 
             # Distribution chart similar to dashboard
             if selected_metrics and group_players:
@@ -1650,6 +1676,13 @@ if all_events_data:
                         ax_h.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
                         jitter = (np.random.rand(len(x_vals)) - 0.5) * 0.15
                         ax_h.scatter(x_vals, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
+                        # Highlight selected player if provided and in group
+                        if selected_player_search != "(none)":
+                            sel_stats = valid_players.get(selected_player_search)
+                            if sel_stats and sel_stats.get('position_group') == effective_group:
+                                sel_val_raw = value_per96(sel_stats, key)
+                                sel_val = percentile_minmax(dist_minmax[key], sel_val_raw) if show_percentile else sel_val_raw
+                                ax_h.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
                     ax_h.set_yticks(y_positions)
                     ax_h.set_yticklabels(metrics_display)
                     ax_h.set_xlim(left=0, right=(100.0 if show_percentile else xmax))
