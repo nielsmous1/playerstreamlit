@@ -1190,6 +1190,33 @@ if all_events_data:
             idx = int(min(9, max(0, rating_0_100 // 10)))
             return palette[int(idx)]
 
+        # Metric groups for Backs (shared across tabs)
+        backs_groups = {
+            'Dribbelen': [
+                ('PBD (m)', 'pbd'),
+                ('Progressive Carries', 'progressive_carries'),
+                ('Take-ons', 'takeons'),
+                ('Take-on %', 'takeon_success_pct')
+            ],
+            'Opbouwen': [
+                ('PBP (m)', 'pbp'),
+                ('Progressive Passes', 'progressive_passes')
+            ],
+            'Eindfase': [
+                ('xA', 'xA'),
+                ('Crosses', 'successful_crosses'),
+                ('Key passes', 'keypasses'),
+                ('xG', 'xG'),
+                ('Passes to Box', 'passes_to_box')
+            ],
+            'Verdedigen': [
+                ('Air Duels Won', 'air_duels_won'),
+                ('Air Duels Win %', 'air_duels_win_pct'),
+                ('Successful Tackles', 'successful_tackles'),
+                ('Successful Interceptions', 'successful_interceptions')
+            ]
+        }
+
         analysis_tab, dashboard_tab, percentiles_tab, dashboard2_tab = st.tabs(["Analysis", "Dashboard", "Percentiles", "Dashboard2"])
 
         with analysis_tab:
@@ -1643,31 +1670,6 @@ if all_events_data:
             if effective_group == 'Backs':
                 st.markdown("**Metric Groups (Backs)**")
 
-                backs_groups = {
-                    'Dribbelen': [
-                        ('PBD (m)', 'pbd'),
-                        ('Progressive Carries', 'progressive_carries'),
-                        ('Take-ons', 'takeons'),
-                        ('Take-on %', 'takeon_success_pct')
-                    ],
-                    'Opbouwen': [
-                        ('PBP (m)', 'pbp'),
-                        ('Progressive Passes', 'progressive_passes')
-                    ],
-                    'Eindfase': [
-                        ('xA', 'xA'),
-                        ('Crosses', 'successful_crosses'),
-                        ('Key passes', 'keypasses'),
-                        ('xG', 'xG'),
-                        ('Passes to Box', 'passes_to_box')
-                    ],
-                    'Verdedigen': [
-                        ('Air Duels Won', 'air_duels_won'),
-                        ('Air Duels Win %', 'air_duels_win_pct'),
-                        ('Successful Tackles', 'successful_tackles'),
-                        ('Successful Interceptions', 'successful_interceptions')
-                    ]
-                }
 
 
                 def badge(text: str, value: float, is_pct: bool) -> str:
@@ -1783,15 +1785,23 @@ if all_events_data:
                                 ax_m.set_title(label, fontsize=11, pad=8)
                                 ax_m.set_yticks([])
                                 
-                                # Choose ticks based on value range - fewer ticks for compactness
+                                # Choose nice rounded ticks
                                 rng = vmax - vmin
-                                if rng <= 1:
+                                
+                                # Calculate appropriate step size for nice ticks
+                                if rng <= 0.1:
+                                    step = 0.02
+                                elif rng <= 0.5:
+                                    step = 0.1
+                                elif rng <= 1:
                                     step = 0.2
+                                elif rng <= 2:
+                                    step = 0.5
                                 elif rng <= 5:
                                     step = 1.0
                                 elif rng <= 10:
                                     step = 2.0
-                                elif rng <= 25:
+                                elif rng <= 20:
                                     step = 5.0
                                 elif rng <= 50:
                                     step = 10.0
@@ -1800,15 +1810,21 @@ if all_events_data:
                                 else:
                                     step = 50.0
                                 
-                                # Generate ticks that include min and max
+                                # Generate nice rounded ticks
+                                # Start from a nice number below or at vmin
+                                start_tick = step * np.floor(vmin / step)
+                                if start_tick < vmin:
+                                    start_tick += step
+                                
+                                # Generate ticks
                                 ticks = []
-                                current = vmin
-                                while current <= vmax + 1e-9:
+                                current = start_tick
+                                while current <= vmax + step:  # Go one step beyond max
                                     ticks.append(current)
                                     current += step
-                                # Ensure max is included
-                                if ticks[-1] < vmax:
-                                    ticks.append(vmax)
+                                
+                                # Remove ticks that are too far above max
+                                ticks = [t for t in ticks if t <= vmax + step]
                                 
                                 ax_m.set_xlim(left=vmin, right=vmax)
                                 ax_m.set_xticks(ticks)
