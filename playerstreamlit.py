@@ -1190,7 +1190,7 @@ if all_events_data:
             idx = int(min(9, max(0, rating_0_100 // 10)))
             return palette[int(idx)]
 
-        analysis_tab, percentiles_tab, dashboard_tab = st.tabs(["Analysis", "Percentiles", "Dashboard"])
+        analysis_tab, dashboard_tab, percentiles_tab = st.tabs(["Analysis", "Dashboard", "Percentiles"])
 
         with analysis_tab:
             st.subheader("Player Performance Analysis")
@@ -1360,150 +1360,176 @@ if all_events_data:
 
         with dashboard_tab:
             st.subheader("Dashboard")
-            
-            if selected_player_global:
-                stats = valid_players[selected_player_global]
-                
-                # Left side: General statistics
-                left_col, right_col = st.columns([1, 2])
-                
-                with left_col:
-                    st.markdown("**General Statistics**")
+            dashboard_cols = st.columns([2, 2, 3])
+
+            # Player info (uses global selection)
+            with dashboard_cols[0]:
+                selected_player = selected_player_global
+
+            # Show standard info
+            if selected_player:
+                stats = valid_players[selected_player]
+                with dashboard_cols[1]:
                     st.metric("Team", stats['team'])
                     st.metric("Minutes Played", f"{stats['minutes_played']:.0f}")
                     st.metric("Primary Position", stats.get('position', 'N/A'))
-                    st.metric("Position Group", stats.get('position_group', 'N/A'))
-                    
-                    # Key metrics
-                    st.markdown("**Key Metrics**")
-                    st.metric("Goals", f"{stats.get('goals', 0):.0f}")
-                    st.metric("Assists", f"{stats.get('assists', 0):.0f}")
-                    st.metric("xG", f"{stats.get('xG', 0):.2f}")
-                    st.metric("xA", f"{stats.get('xA', 0):.2f}")
-                    st.metric("Shots", f"{stats.get('shots', 0):.0f}")
-                    st.metric("PBD (m)", f"{stats.get('pbd', 0):.0f}")
-                    st.metric("Take-ons", f"{stats.get('takeons', 0):.0f}")
-                    st.metric("Take-on %", f"{stats.get('takeon_success_pct', 0):.1f}%")
-                
-                with right_col:
-                    # Pizza chart for key metrics
-                    st.markdown("**Performance Overview**")
-                    
-                    # Prepare data for pizza chart
-                    pizza_metrics = {
-                        'Goals': stats.get('goals', 0),
-                        'Assists': stats.get('assists', 0),
-                        'xG': stats.get('xG', 0),
-                        'xA': stats.get('xA', 0),
-                        'Shots': stats.get('shots', 0),
-                        'PBD (m)': stats.get('pbd', 0),
-                        'Take-ons': stats.get('takeons', 0),
-                        'Passes to Box': stats.get('passes_to_box', 0)
-                    }
-                    
-                    # Filter out zero values and create pizza chart
-                    non_zero_metrics = {k: v for k, v in pizza_metrics.items() if v > 0}
-                    
-                    if non_zero_metrics:
-                        fig_pizza, ax_pizza = plt.subplots(figsize=(8, 6))
-                        labels = list(non_zero_metrics.keys())
-                        values = list(non_zero_metrics.values())
-                        colors = plt.cm.Set3(np.linspace(0, 1, len(labels)))
-                        
-                        wedges, texts, autotexts = ax_pizza.pie(values, labels=labels, autopct='%1.1f%%', 
-                                                               colors=colors, startangle=90)
-                        
-                        # Improve text appearance
-                        for autotext in autotexts:
-                            autotext.set_color('white')
-                            autotext.set_fontweight('bold')
-                        
-                        ax_pizza.set_title(f"{selected_player_global} - Key Metrics Distribution")
-                        st.pyplot(fig_pizza, use_container_width=True)
-                    else:
-                        st.info("No data available for pizza chart")
-                
-                # Metric group ratings below
-                st.markdown("---")
-                st.markdown("**Metric Group Ratings**")
-                
-                # Calculate overall rating first
-                def calculate_overall_rating(player_stats, position_group):
-                    """Calculate overall rating based on all available metrics"""
-                    if position_group not in backs_groups:
-                        return 50.0  # Default for non-backs
-                    
-                    group_metrics = backs_groups[position_group]
-                    total_weight = 0
-                    weighted_sum = 0
-                    
-                    for group_name, items in group_metrics.items():
-                        for _, key in items:
-                            val = player_stats.get(key, 0.0)
-                            # Simple weight based on metric importance
-                            weight = 1.0
-                            total_weight += weight
-                            weighted_sum += val * weight
-                    
-                    if total_weight == 0:
-                        return 50.0
-                    
-                    # Normalize to 0-100 scale
-                    avg_value = weighted_sum / total_weight
-                    return max(0.0, min(100.0, avg_value * 10))  # Scale factor for visibility
-                
-                # Show overall rating
-                overall_rating = calculate_overall_rating(stats, stats.get('position_group', ''))
-                color = _rating_color(overall_rating)
-                st.markdown(f"""
-                <div style="background: {color}; 
-                            color: white; padding: 15px 25px; border-radius: 10px; text-align: center; 
-                            font-size: 24px; font-weight: bold; margin: 15px 0;">
-                    Overall Rating: {overall_rating:.1f}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Show metric group ratings
-                position_group = stats.get('position_group', '')
-                if position_group in backs_groups:
-                    group_metrics = backs_groups[position_group]
-                    
-                    for group_name, items in group_metrics.items():
-                        st.markdown(f"**{group_name}**")
-                        
-                        # Calculate group rating
-                        group_total = 0
-                        group_count = 0
-                        for _, key in items:
-                            val = stats.get(key, 0.0)
-                            group_total += val
-                            group_count += 1
-                        
-                        group_rating = (group_total / group_count * 10) if group_count > 0 else 0
-                        group_rating = max(0.0, min(100.0, group_rating))
-                        
-                        # Display group rating
-                        group_color = _rating_color(group_rating)
-                        st.markdown(f"""
-                        <div style="background: {group_color}; 
-                                    color: white; padding: 8px 15px; border-radius: 6px; text-align: center; 
-                                    font-size: 16px; font-weight: bold; margin: 5px 0; display: inline-block;">
-                            {group_rating:.1f}
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Show individual metrics in this group
-                        metric_cols = st.columns(len(items))
-                        for (label, key), col in zip(items, metric_cols):
-                            with col:
-                                value = stats.get(key, 0.0)
-                                st.metric(label, f"{value:.2f}")
-                        
-                        st.markdown("---")
+
+            # Radar chart controls
+            with dashboard_cols[2]:
+                st.markdown("**Radar Chart Settings**")
+                available_metrics = {
+                    'xG': 'xG',
+                    'PSxG': 'PSxG',
+                    'PSxG - xG': 'PSxG_minus_xG',
+                    'Shots': 'shots',
+                    'PBD (m)': 'pbd',
+                    'Take-ons': 'takeons',
+                    'Take-on %': 'takeon_success_pct',
+                    'Passes to Box': 'passes_to_box',
+                    'Counter Pressures': 'counter_pressures',
+                    'Goals Prevented': 'goals_prevented',
+                    'PSxG Faced': 'psxg_faced',
+                    'Goals Allowed': 'goals_allowed'
+                }
+                default_selection = ['xG', 'Shots', 'PBD (m)', 'Take-ons', 'Passes to Box']
+                selected_labels = st.multiselect(
+                    "Select statistics",
+                    options=list(available_metrics.keys()),
+                    default=[m for m in default_selection if m in available_metrics]
+                )
+                per96 = st.checkbox("Per 96 minutes", value=False, help="Normalize stats to 96 minutes")
+                normalize_percentile = st.checkbox("Percentile (0–100)", value=True, help="Convert metrics to percentile ranks across all players")
+
+            # Build and show charts
+            if selected_player and selected_labels:
+                chosen_keys = [available_metrics[label] for label in selected_labels]
+
+                # Prepare vectors
+                def get_value(pstats, key):
+                    value = pstats.get(key, 0.0)
+                    if per96:
+                        minutes = max(pstats.get('minutes_played', 0), 1e-9)
+                        value = value * (96.0 / minutes) if minutes > 0 else 0.0
+                    return float(value)
+
+                selected_stats = valid_players[selected_player]
+                player_values_raw = [get_value(selected_stats, k) for k in chosen_keys]
+
+                # Percentile normalization helper
+                def percentile_rank(values_list, target_value):
+                    if not values_list:
+                        return 0.0
+                    # Handle metrics that can be negative by using raw value
+                    less_equal = sum(1 for v in values_list if v <= target_value)
+                    return 100.0 * less_equal / len(values_list)
+
+                # Precompute raw distributions per metric
+                distributions = {}
+                for key in chosen_keys:
+                    vals = []
+                    for _, p in valid_players.items():
+                        vals.append(get_value(p, key))
+                    distributions[key] = vals
+
+                if normalize_percentile:
+                    radar_values = [percentile_rank(distributions[k], v) for k, v in zip(chosen_keys, player_values_raw)]
+                    radar_suffix = " (percentile)"
                 else:
-                    st.info(f"Metric group ratings not available for position group: {position_group}")
-            else:
-                st.info("Please select a player to view dashboard")
+                    radar_values = player_values_raw
+                    radar_suffix = ""
+
+                plot_cols = st.columns([3, 4])
+
+                # Left: horizontal bar with all players' dots per metric
+                with plot_cols[0]:
+                    fig_h, ax_h = plt.subplots(figsize=(8, 6 + max(0, len(chosen_keys) - 5) * 0.4))
+                    metrics_display = list(reversed(selected_labels))
+                    keys_display = list(reversed(chosen_keys))
+                    y_positions = np.arange(len(keys_display))
+
+                    # Precompute per-metric scales, averages, and values
+                    big3_teams = {"PSV", "Ajax", "Feyenoord"}
+                    for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
+                        # All players' values for this metric
+                        values_raw = distributions[key]
+                        values_all = []
+                        big3_values_raw = []
+                        for name, p in valid_players.items():
+                            v = get_value(p, key)
+                            vv = percentile_rank(values_raw, v) if normalize_percentile else v
+                            values_all.append(vv)
+                            team_name = str(p.get('team', '') or '')
+                            if any(t.lower() in team_name.lower() for t in big3_teams):
+                                big3_values_raw.append(v)
+
+                        # Scales
+                        if normalize_percentile:
+                            xmax = 100.0
+                        else:
+                            xmax = max(values_raw) if values_raw else 1.0
+                            if xmax == 0:
+                                xmax = 1.0
+
+                        y = y_positions[idx]
+                        # Background bar
+                        ax_h.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
+
+                        # All players small grey dots
+                        jitter = (np.random.rand(len(values_all)) - 0.5) * 0.15
+                        ax_h.scatter(values_all, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
+
+                        # Selected player value
+                        sel_v_raw = get_value(selected_stats, key)
+                        sel_v = percentile_rank(values_raw, sel_v_raw) if normalize_percentile else sel_v_raw
+                        ax_h.scatter([sel_v], [y], s=70, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3, label="Selected player" if idx == 0 else None)
+
+                        # Averages
+                        if values_raw:
+                            avg_raw = float(np.mean(values_raw))
+                            avg_pct = percentile_rank(values_raw, avg_raw) if normalize_percentile else avg_raw
+                            ax_h.vlines(avg_pct, y - 0.28, y + 0.28, linestyle=(0, (4, 4)), color="#4d4d4d", linewidth=1.4, zorder=1, label="Average" if idx == 0 else None)
+                        if big3_values_raw:
+                            avg_big3_raw = float(np.mean(big3_values_raw))
+                            avg_big3_pct = percentile_rank(values_raw, avg_big3_raw) if normalize_percentile else avg_big3_raw
+                            ax_h.vlines(avg_big3_pct, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1, label="Top 3 (PSV/Ajax/Fey)" if idx == 0 else None)
+
+                    ax_h.set_yticks(y_positions)
+                    ax_h.set_yticklabels(metrics_display)
+                    ax_h.set_xlim(left=0, right=xmax)
+                    ax_h.invert_yaxis()
+                    ax_h.set_xlabel("Percentile (0–100)" if normalize_percentile else ("Per 96" if per96 else "Raw value"))
+                    ax_h.set_title("Distribution by metric" + (" (percentile)" if normalize_percentile else ""))
+                    ax_h.grid(axis='x', alpha=0.15)
+                    for spine in ["top", "right", "left", "bottom"]:
+                        ax_h.spines[spine].set_visible(False)
+                    handles, labels_ = ax_h.get_legend_handles_labels()
+                    if handles:
+                        ax_h.legend(loc="lower right", frameon=False)
+                    st.pyplot(fig_h, use_container_width=True)
+
+                # Right: Radar plot
+                with plot_cols[1]:
+                    num_vars = len(radar_values)
+                    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+                    radar_plot_values = radar_values + radar_values[:1]
+                    angles_plot = angles + angles[:1]
+
+                    fig, ax = plt.subplots(subplot_kw=dict(polar=True), figsize=(6.5, 6.5))
+                    ax.plot(angles_plot, radar_plot_values, color="#1f77b4", linewidth=2.5)
+                    ax.fill(angles_plot, radar_plot_values, color="#1f77b4", alpha=0.25)
+                    ax.set_theta_offset(np.pi / 2)
+                    ax.set_theta_direction(-1)
+                    ax.set_rlabel_position(0)
+                    tick_labels = [f"{label}" for label in selected_labels]
+                    ax.set_xticks(angles)
+                    ax.set_xticklabels(tick_labels)
+                    if normalize_percentile:
+                        ax.set_ylim(0, 100)
+                        ax.set_yticks([20, 40, 60, 80, 100])
+                        ax.set_yticklabels(["20", "40", "60", "80", "100"]) 
+                    ax.grid(alpha=0.2)
+                    ax.set_title(f"{selected_player} - Radar{radar_suffix}")
+                    st.pyplot(fig, use_container_width=True)
 
         # Position groups mapping
         POSITION_GROUPS = {
