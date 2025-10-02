@@ -1857,6 +1857,20 @@ if all_events_data:
                 st.write(f"Debug - Position: {stats.get('position', 'N/A')}")
                 st.write(f"Debug - Position Group: {position_group}")
                 st.write(f"Debug - Is Backs: {position_group == 'Backs'}")
+                st.write(f"Debug - Backs groups available: {list(backs_groups.keys())}")
+                st.write(f"Debug - Position in Backs groups: {position_group in backs_groups}")
+                
+                # Debug: Show all position groups
+                all_groups = set()
+                for pname, pstats in valid_players.items():
+                    all_groups.add(pstats.get('position_group', 'Unknown'))
+                st.write(f"Debug - All position groups found: {sorted(all_groups)}")
+                
+                # Debug: Show Backs players
+                backs_players = [(name, pstats.get('position', 'N/A'), pstats.get('position_group', 'N/A')) 
+                               for name, pstats in valid_players.items() 
+                               if pstats.get('position_group') == 'Backs']
+                st.write(f"Debug - Backs players: {backs_players[:5]}")  # Show first 5
                 
                 # Layout: top row with player info and radar chart
                 top_cols = st.columns([1, 2])
