@@ -1175,7 +1175,7 @@ if all_events_data:
                         if name and name != 'NOT_APPLICABLE' and name != 'Unknown' and name.strip()}
         sorted_players = sorted(valid_players.items(), key=lambda x: x[1]['xG'], reverse=True)
         
-        analysis_tab, dashboard_tab = st.tabs(["Analysis", "Dashboard"])
+        analysis_tab, dashboard_tab, percentiles_tab = st.tabs(["Analysis", "Dashboard", "Percentiles"])
 
         with analysis_tab:
             st.subheader("Player Performance Analysis")
@@ -1516,3 +1516,132 @@ if all_events_data:
                     ax.grid(alpha=0.2)
                     ax.set_title(f"{selected_player} - Radar{radar_suffix}")
                     st.pyplot(fig, use_container_width=True)
+
+        # Position groups mapping
+        POSITION_GROUPS = {
+            'Keepers': {'DM'},
+            'Centrale verdedigers': {'CV'},
+            'Backs': {'LV', 'RV', 'LVV', 'RVV'},
+            'Middenvelders': {'VM', 'CM', 'AM'},
+            'Vleugelspelers': {'LM', 'RM', 'LB', 'RB'},
+            'Spitsen': {'SP'}
+        }
+
+        def get_position_group(mapped_position: str):
+            if not mapped_position:
+                return 'Onbekend'
+            for group_name, positions in POSITION_GROUPS.items():
+                if mapped_position in positions:
+                    return group_name
+            return 'Onbekend'
+
+        # Attach position group to each valid player
+        for pname, pstats in valid_players.items():
+            mapped_pos = pstats.get('position', '')
+            pstats['position_group'] = get_position_group(mapped_pos)
+
+        with percentiles_tab:
+            st.subheader("Percentiles per 96 by Position Group")
+
+            # Metric selection for percentile computation
+            metrics_catalog = {
+                'xG': 'xG',
+                'xA': 'xA',
+                'Shots': 'shots',
+                'PBD (m)': 'pbd',
+                'PBP (m)': 'pbp',
+                'Progressive Passes': 'progressive_passes',
+                'Progressive Carries': 'progressive_carries',
+                'Take-ons': 'takeons',
+                'Take-on %': 'takeon_success_pct',
+                'Passes to Box': 'passes_to_box',
+                'Successful Crosses': 'successful_crosses',
+                'Key passes': 'keypasses',
+                'Air Duels Won': 'air_duels_won',
+                'Air Duels Win %': 'air_duels_win_pct',
+                'Successful Tackles': 'successful_tackles',
+                'Successful Interceptions': 'successful_interceptions',
+                'PSxG Faced': 'psxg_faced',
+                'Goals Allowed': 'goals_allowed',
+                'Goals Prevented': 'goals_prevented'
+            }
+
+            left, right = st.columns([2, 3])
+            with left:
+                pos_groups = list(POSITION_GROUPS.keys())
+                selected_group = st.selectbox("Position group", options=pos_groups)
+                selected_metrics = st.multiselect(
+                    "Select metrics",
+                    options=list(metrics_catalog.keys()),
+                    default=['xG', 'Shots', 'PBD (m)']
+                )
+                per96 = st.checkbox("Per 96 minutes", value=True)
+                show_percentile = st.checkbox("Show percentiles (0-100)", value=True)
+
+            # Build dataset for the selected group
+            group_players = [(name, p) for name, p in valid_players.items() if p.get('position_group') == selected_group]
+            # Compute per-96 values where applicable
+            def value_per96(pstats, key):
+                v = pstats.get(key, 0.0)
+                if key.endswith('_pct') or key == 'air_duels_win_pct':
+                    return float(v)
+                if per96:
+                    minutes = max(pstats.get('minutes_played', 0), 1e-9)
+                    return float(v) * (96.0 / minutes) if minutes > 0 else 0.0
+                return float(v)
+
+            # Prepare distributions for chosen metrics
+            metric_keys = [metrics_catalog[m] for m in selected_metrics]
+            distributions = {k: [value_per96(p, k) for _, p in group_players] for k in metric_keys}
+
+            def percentile_rank(values_list, target_value):
+                if not values_list:
+                    return 0.0
+                less_equal = sum(1 for v in values_list if v <= target_value)
+                return 100.0 * less_equal / len(values_list)
+
+            # Table of percentiles
+            rows = []
+            for name, p in group_players:
+                row = {
+                    'Player': name,
+                    'Team': p.get('team', ''),
+                    'Position': p.get('position', ''),
+                    'Minutes': f"{p.get('minutes_played', 0):.0f}"
+                }
+                for label, key in zip(selected_metrics, metric_keys):
+                    val = value_per96(p, key)
+                    row[label] = f"{percentile_rank(distributions[key], val):.1f}" if show_percentile else f"{val:.2f}"
+                rows.append(row)
+
+            with right:
+                st.dataframe(rows, use_container_width=True, hide_index=True)
+
+            # Distribution chart similar to dashboard
+            if selected_metrics and group_players:
+                chart_cols = st.columns([3, 4])
+                with chart_cols[0]:
+                    fig_h, ax_h = plt.subplots(figsize=(8, 6))
+                    metrics_display = list(reversed(selected_metrics))
+                    keys_display = list(reversed(metric_keys))
+                    y_positions = np.arange(len(keys_display))
+                    for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
+                        values_raw = distributions[key]
+                        x_vals = [percentile_rank(values_raw, v) if show_percentile else v for v in values_raw]
+                        xmax = 100.0 if show_percentile else (max(values_raw) if values_raw else 1.0)
+                        if not show_percentile and xmax == 0:
+                            xmax = 1.0
+                        y = y_positions[idx]
+                        ax_h.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
+                        jitter = (np.random.rand(len(x_vals)) - 0.5) * 0.15
+                        ax_h.scatter(x_vals, y + jitter, s=14, color="#8a8a8a", alpha=0.65, zorder=2)
+                    ax_h.set_yticks(y_positions)
+                    ax_h.set_yticklabels(metrics_display)
+                    ax_h.set_xlim(left=0, right=(100.0 if show_percentile else xmax))
+                    ax_h.invert_yaxis()
+                    ax_h.set_xlabel("Percentile (0–100)" if show_percentile else ("Per 96" if per96 else "Raw value"))
+                    ax_h.set_title("Distribution by metric" + (" (percentile)" if show_percentile else ""))
+                    ax_h.grid(axis='x', alpha=0.15)
+                    for spine in ["top", "right", "left", "bottom"]:
+                        ax_h.spines[spine].set_visible(False)
+                    st.pyplot(fig_h, use_container_width=True)
