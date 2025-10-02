@@ -1240,6 +1240,12 @@ if all_events_data:
             mapped_pos = pstats.get('position', '')
             pstats['position_group'] = get_position_group(mapped_pos)
 
+        # Helper function for per-96 minute calculations
+        def get_value_per96(pstats, key):
+            value = pstats.get(key, 0.0)
+            minutes = max(pstats.get('minutes_played', 0), 1e-9)
+            return float(value) * (96.0 / minutes) if minutes > 0 else 0.0
+
         # Function to calculate match-specific stats
         def calculate_match_stats(events, player_name):
             """Calculate per-96 minute stats for a specific match"""
@@ -1991,11 +1997,6 @@ if all_events_data:
                                     group_names.append(group_name)
                         
                         if all_metrics:
-                            # Get values for selected player
-                            def get_value_per96(pstats, key):
-                                value = pstats.get(key, 0.0)
-                                minutes = max(pstats.get('minutes_played', 0), 1e-9)
-                                return float(value) * (96.0 / minutes) if minutes > 0 else 0.0
                             
                             # Calculate percentiles for radar chart
                             def calculate_percentile_rank(values, target_value):
