@@ -1784,8 +1784,8 @@ if all_events_data:
                                     continue
                                 labels = ev.get('labels', []) or []
                                 base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
-                                    # Dribbles/PBD and progressive carries
-                                    if base == 3 and sub == 300 and result == 1:
+                                # Dribbles/PBD and progressive carries
+                                if base == 3 and sub == 300 and result == 1:
                                         gp = ev.get('metrics', {}).get('goalProgression', 0.0) or 0.0
                                         if gp < 0:
                                             if any(k == 'pbd' for _, k in items):
