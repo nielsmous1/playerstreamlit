@@ -1683,7 +1683,7 @@ if all_events_data:
                     else:
                         norm_weights = {k: w / total_w for k, w in weights.items()}
 
-                    # Distribution plot: rescale each metric to full width (0..100)
+                    # Distribution plot: per-metric true-value axes
                     fig, ax = plt.subplots(figsize=(8, 5))
                     metrics_display = [label for label, _ in items][::-1]
                     keys_display = metrics_keys_local[::-1]
@@ -1701,15 +1701,10 @@ if all_events_data:
                     for idx, (label, key) in enumerate(zip(metrics_display, keys_display)):
                         vals = distributions_local[key]
                         vmin, vmax = mm_local[key]
-                        # Scale to 0..100 (full width) for display
-                        x_vals = []
-                        if vmax > vmin:
-                            x_vals = [100.0 * (float(v) - vmin) / (vmax - vmin) for v in vals]
-                        else:
-                            x_vals = [50.0 for _ in vals]
-                        xmax = 100.0
+                        x_vals = [float(v) for v in vals]
+                        xmin = vmin; xmax = vmax
                         y = y_positions[idx]
-                        ax.barh(y, xmax, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
+                        ax.barh(y, (xmax - xmin) if xmax > xmin else 1.0, left=xmin, color="#f7f7fb", edgecolor="none", height=0.6, zorder=1)
                         # No jitter: plot dots on a straight line
                         ax.scatter(x_vals, [y] * len(x_vals), s=14, color="#8a8a8a", alpha=0.65, zorder=2)
                         # competition average (within group)
@@ -1723,155 +1718,48 @@ if all_events_data:
                             if any(t.lower() in team_name.lower() for t in big3_teams):
                                 big3_vals.append(value_per96(p, key))
                         if big3_vals:
-                            # scale big3 avg to 0..100
-                            if vmax > vmin:
-                                big3_avg = 100.0 * (float(np.mean(big3_vals)) - vmin) / (vmax - vmin)
-                            else:
-                                big3_avg = 50.0
+                            big3_avg = float(np.mean(big3_vals))
                             ax.vlines(big3_avg, y - 0.28, y + 0.28, linestyle=(0, (2, 3)), color="#d62728", linewidth=1.4, zorder=1)
                         # highlight selected player
                         sel_stats = valid_players.get(selected_player_global)
                         if sel_stats and sel_stats.get('position_group') == effective_group:
-                            sel_val_raw = value_per96(sel_stats, key)
-                            if vmax > vmin:
-                                sel_val = 100.0 * (sel_val_raw - vmin) / (vmax - vmin)
-                            else:
-                                sel_val = 50.0
+                            sel_val = value_per96(sel_stats, key)
                             ax.scatter([sel_val], [y], s=90, color="#1f77b4", edgecolor="white", linewidth=0.8, zorder=3)
                     ax.set_yticks(y_positions); ax.set_yticklabels(metrics_display)
-                    ax.set_xlim(left=0, right=100.0)
-                    # Add ticks for each bar baseline (0..100)
-                    ax.set_xticks([0, 20, 40, 60, 80, 100])
+                    # Per-metric x axis: overall min/max across metrics
+                    global_min = min((mm_local[k][0] for k in keys_display), default=0.0)
+                    global_max = max((mm_local[k][1] for k in keys_display), default=1.0)
+                    if global_max <= global_min:
+                        global_max = global_min + 1.0
+                    ax.set_xlim(left=global_min, right=global_max)
+                    # Ticks based on range
+                    rng = global_max - global_min
+                    if rng <= 5:
+                        step = max(0.5, rng / 5.0)
+                    elif rng <= 25:
+                        step = 5
+                    else:
+                        step = round(rng / 5.0, -int(np.floor(np.log10(max(rng, 1)))) + 1)
+                    ticks = np.arange(global_min, global_max + 1e-9, step)
+                    ax.set_xticks(ticks)
                     ax.invert_yaxis(); ax.grid(axis='x', alpha=0.15)
                     for spine in ["top", "right", "left", "bottom"]:
                         ax.spines[spine].set_visible(False)
                     st.pyplot(fig, use_container_width=True)
 
-                    # Compute selected player's rating (weighted average of percentiles within group)
-                    rating_value = None
+                    # Show percentile per metric as colored badges
                     sel_stats = valid_players.get(selected_player_global)
                     if sel_stats and sel_stats.get('position_group') == effective_group:
-                        parts = []
-                        for _, key in items:
-                            val = value_per96(sel_stats, key)
-                            pct = percentile_minmax(minmax_local[key], val)
-                            parts.append(pct * norm_weights[key])
-                        rating_value = sum(parts)
-                    if rating_value is not None:
-                        # Clamp rating and show in colored badge next to title
-                        rating_value = max(0.0, min(100.0, rating_value))
-                        badge_html = badge(group_name, rating_value, is_pct=True)
-                        st.markdown(badge_html, unsafe_allow_html=True)
+                        cols_pct = st.columns(len(items))
+                        for (label, key), c in zip(items, cols_pct):
+                            with c:
+                                vmin, vmax = mm_local[key]
+                                val = value_per96(sel_stats, key)
+                                pct = percentile_minmax((vmin, vmax), val)
+                                pct = max(0.0, min(100.0, pct))
+                                st.markdown(badge(label, pct, is_pct=True), unsafe_allow_html=True)
 
-                    # Per-game rating series for the selected player
-                    sel_stats = valid_players.get(selected_player_global)
-                    if sel_stats and sel_stats.get('position_group') == effective_group:
-                        series_x = []
-                        series_y = []
-                        for match_idx, events_data in enumerate(all_events_data):
-                            events = events_data.get('data', []) if isinstance(events_data, dict) else []
-                            # compute minutes for player in this match
-                            match_minutes_map = calculate_player_minutes(events)
-                            minutes = float(match_minutes_map.get(selected_player_global, 0))
-                            if minutes <= 0:
-                                continue
-                            # per-match metric values
-                            per_match_vals = {k: 0.0 for _, k in items}
-                            # iterate events to fill values
-                            for ev in events:
-                                if ev.get('playerName') != selected_player_global:
-                                    continue
-                                labels = ev.get('labels', []) or []
-                                base = ev.get('baseTypeId'); sub = ev.get('subTypeId'); result = ev.get('resultId')
-                                # Dribbles/PBD and progressive carries
-                                if base == 3 and sub == 300 and result == 1:
-                                    gp = ev.get('metrics', {}).get('goalProgression', 0.0) or 0.0
-                                    if gp < 0:
-                                        if any(k == 'pbd' for _, k in items):
-                                            per_match_vals['pbd'] = per_match_vals.get('pbd', 0.0) + abs(gp)
-                                    if 119 in labels and any(k == 'progressive_carries' for _, k in items):
-                                        per_match_vals['progressive_carries'] = per_match_vals.get('progressive_carries', 0.0) + 1
-                                # Take-ons from labels 120/121 handled in preprocessing; approximate via labels here
-                                if 120 in labels and any(k == 'takeons' for _, k in items):
-                                    # count successful take-ons only if 121 also present
-                                    if 121 in labels:
-                                        per_match_vals['takeons'] = per_match_vals.get('takeons', 0.0) + 1
-                                    # Passes and progression by passes/key passes/crosses/xA
-                                    if (('pass' in str(ev.get('baseTypeName', '')).lower()) or base == 2) and result == 1:
-                                        gp = ev.get('metrics', {}).get('goalProgression', None)
-                                        if gp is not None and gp < 0 and any(k == 'pbp' for _, k in items):
-                                            per_match_vals['pbp'] = per_match_vals.get('pbp', 0.0) + abs(gp)
-                                        if gp is not None and gp < -10 and any(k == 'progressive_passes' for _, k in items):
-                                            per_match_vals['progressive_passes'] = per_match_vals.get('progressive_passes', 0.0) + 1
-                                        if any(k == 'keypasses' for _, k in items) and 82 in labels:
-                                            per_match_vals['keypasses'] = per_match_vals.get('keypasses', 0.0) + 1
-                                        if any(k == 'successful_crosses' for _, k in items) and 101 in labels:
-                                            per_match_vals['successful_crosses'] = per_match_vals.get('successful_crosses', 0.0) + 1
-                                        if any(k == 'xA' for _, k in items):
-                                            xa_val = ev.get('metrics', {}).get('xA', 0.0) or 0.0
-                                            per_match_vals['xA'] = per_match_vals.get('xA', 0.0) + float(xa_val)
-                                    # xG
-                                    if any(k == 'xG' for _, k in items):
-                                        xg_val = ev.get('metrics', {}).get('xG')
-                                        if xg_val is not None:
-                                            per_match_vals['xG'] = per_match_vals.get('xG', 0.0) + float(xg_val)
-                                    # Passes to box label 72
-                                    if any(k == 'passes_to_box' for _, k in items) and 72 in labels:
-                                        per_match_vals['passes_to_box'] = per_match_vals.get('passes_to_box', 0.0) + 1
-                                    # Air duels/tackles/interceptions
-                                    if any(k == 'air_duels_won' for _, k in items) and base == 4 and sub == 402 and result == 1:
-                                        per_match_vals['air_duels_won'] = per_match_vals.get('air_duels_won', 0.0) + 1
-                                    if any(k == 'air_duels_win_pct' for _, k in items) and base == 4 and sub == 402:
-                                        # accumulate totals to compute pct later, store temp
-                                        per_match_vals['_air_duel_tot'] = per_match_vals.get('_air_duel_tot', 0.0) + 1
-                                    if any(k == 'successful_tackles' for _, k in items) and base == 4 and sub == 400 and result == 1:
-                                        per_match_vals['successful_tackles'] = per_match_vals.get('successful_tackles', 0.0) + 1
-                                    if any(k == 'successful_interceptions' for _, k in items) and base == 5 and sub == 500 and result == 1:
-                                        per_match_vals['successful_interceptions'] = per_match_vals.get('successful_interceptions', 0.0) + 1
-                                # finalize air duel pct
-                                if any(k == 'air_duels_win_pct' for _, k in items):
-                                    wins = per_match_vals.get('air_duels_won', 0.0)
-                                    tot = per_match_vals.get('_air_duel_tot', 0.0)
-                                    per_match_vals['air_duels_win_pct'] = (100.0 * wins / tot) if tot > 0 else 0.0
-                                # compute rating for match
-                                parts = []
-                                for _, key in items:
-                                    v = per_match_vals.get(key, 0.0)
-                                    # per96 scaling except percentage metrics
-                                    if key not in ('takeon_success_pct', 'air_duels_win_pct') and per96:
-                                        v = v * (96.0 / minutes) if minutes > 0 else 0.0
-                                    pct = percentile_minmax(minmax_local[key], v)
-                                    parts.append(pct * norm_weights[key])
-                                rating_match = max(0.0, min(100.0, sum(parts)))
-                                # x-axis label as match index with date/opponent
-                                # Derive label from file name
-                                label_txt = str(match_idx + 1)
-                                try:
-                                    fname = file_names[match_idx] if match_idx < len(file_names) else ""
-                                    home, away, date_part = parse_teams_from_filename(fname)
-                                    # Decide opponent vs fixture
-                                    sel_team = str(sel_stats.get('team', '') or '')
-                                    if home and away:
-                                        opponent = away if sel_team.lower() in (home or '').lower() else home
-                                    else:
-                                        opponent = "?"
-                                    label_txt = f"{date_part or ''} vs {opponent}"
-                                except Exception:
-                                    pass
-                                series_x.append(label_txt)
-                                series_y.append(rating_match)
-                            # plot line chart
-                            fig_s, ax_s = plt.subplots(figsize=(8, 3))
-                            ax_s.plot(range(len(series_x)), series_y, marker='o', color="#1f77b4")
-                            ax_s.set_title(f"{group_name} rating per match - {selected_player_global}")
-                            ax_s.set_xlabel("Match")
-                            ax_s.set_ylabel("Rating (0-100)")
-                            ax_s.grid(alpha=0.2)
-                            # show labels as xticks if not too many
-                            if len(series_x) <= 16:
-                                ax_s.set_xticks(range(len(series_x)))
-                                ax_s.set_xticklabels(series_x, rotation=45, ha='right')
-                            st.pyplot(fig_s, use_container_width=True)
+                    # Removed per-match rating graphs per request
 
                 # Render all backs groups
                 for gname, items in backs_groups.items():
