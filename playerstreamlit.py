@@ -1593,19 +1593,7 @@ if all_events_data:
                     return float(v) * (96.0 / minutes) if minutes > 0 else 0.0
                 return float(v)
 
-            # Prepare distributions and min-max stats for chosen metrics (within selected group)
-            metric_keys = [metrics_catalog[m] for m in selected_metrics]
-            distributions = {k: [value_per96(p, k) for _, p in group_players] for k in metric_keys}
-            dist_minmax = {}
-            for k, vals in distributions.items():
-                if vals:
-                    vmin = float(min(vals))
-                    vmax = float(max(vals))
-                else:
-                    vmin = 0.0
-                    vmax = 0.0
-                dist_minmax[k] = (vmin, vmax)
-
+            # Percentile helper (min-max within a given (vmin, vmax))
             def percentile_minmax(values_minmax, target_value):
                 vmin, vmax = values_minmax
                 if vmax > vmin:
@@ -1613,25 +1601,10 @@ if all_events_data:
                 # All equal; return 50 to avoid NaN and indicate mid
                 return 50.0
 
-            # Table of percentiles
-            rows = []
-            for name, p in group_players:
-                row = {
-                    'Player': name,
-                    'Team': p.get('team', ''),
-                    'Position': p.get('position', ''),
-                    'Minutes': float(p.get('minutes_played', 0) or 0)
-                }
-                for label, key in zip(selected_metrics, metric_keys):
-                    val = value_per96(p, key)
-                    row[label] = float(round(percentile_minmax(dist_minmax[key], val), 3)) if show_percentile else float(val)
-                rows.append(row)
-
             with right:
-                # Removed detailed table in favor of group sections below
-                pass
+                # Reserved for future summary; group sections below handle visuals and ratings
+                st.empty()
 
-            # Distribution chart similar to dashboard
             # Removed overall distribution plot in favor of per-group charts below
 
             # Metric groups for Backs only (for now)
