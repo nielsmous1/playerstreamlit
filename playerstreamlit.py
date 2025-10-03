@@ -1963,7 +1963,7 @@ if all_events_data:
                 
                 # Layout: top row with player info and radar chart, bottom row with line chart
                 top_cols = st.columns([1, 2])
-                bottom_cols = st.columns([1, 6])
+                bottom_cols = st.columns([1, 2])
                 
                 # Top left: Player info and ratings
                 with top_cols[0]:
@@ -2117,7 +2117,7 @@ if all_events_data:
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
                                                         lw=1, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.1, 1.0), fontsize=3)
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.95, 0.95), fontsize=3)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
