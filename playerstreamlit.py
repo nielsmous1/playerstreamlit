@@ -1963,7 +1963,7 @@ if all_events_data:
                 
                 # Layout: top row with player info and radar chart, bottom row with line chart
                 top_cols = st.columns([1, 2])
-                bottom_cols = st.columns([1, 5])
+                bottom_cols = st.columns([1, 6])
                 
                 # Top left: Player info and ratings
                 with top_cols[0]:
@@ -2020,7 +2020,7 @@ if all_events_data:
                             <div style="background: {overall_color}; 
                                         color: white; padding: 20px; border-radius: 12px; text-align: center; 
                                         font-size: 28px; font-weight: bold; margin: 8px 0; 
-                                        width: 120px; height: 80px; display: flex; align-items: center; justify-content: center;">
+                                        height: 80px; display: flex; align-items: center; justify-content: center;">
                                 {overall_score:.1f}
                             </div>
                             """, unsafe_allow_html=True)
@@ -2106,17 +2106,17 @@ if all_events_data:
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
                             ax.set_xticks(angles)
-                            ax.set_xticklabels(radar_labels, fontsize=8, fontweight='bold')
+                            ax.set_xticklabels(radar_labels, fontsize=5, fontweight='bold')
                             ax.set_ylim(0, 100)
                             ax.set_yticks([20, 40, 60, 80, 100])
-                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=8)
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=5)
                             # Keep the inner grid, remove only the outer circle
                             ax.grid(True, alpha=0.2)
                             
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
-                                                        lw=2, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+                                                        lw=1.5, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=5)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
@@ -2221,7 +2221,7 @@ if all_events_data:
                             
                             # Create line chart
                             if match_scores:
-                                fig_line, ax_line = plt.subplots(figsize=(30, 5))
+                                fig_line, ax_line = plt.subplots(figsize=(35, 5))
                                 
                                 # Plot the line
                                 ax_line.plot(range(len(match_scores)), match_scores, 
