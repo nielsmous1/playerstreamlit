@@ -1963,7 +1963,7 @@ if all_events_data:
                 
                 # Layout: top row with player info and radar chart, bottom row with line chart
                 top_cols = st.columns([1, 2])
-                bottom_cols = st.columns([2, 1])
+                bottom_cols = st.columns([3])
                 
                 # Top left: Player info and ratings
                 with top_cols[0]:
