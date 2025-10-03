@@ -2105,8 +2105,8 @@ if all_events_data:
                             ax.set_theta_offset(np.pi / 2)
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
-                            # Add padding to prevent text overlap
-                            ax.set_ylim(0, 120)
+                            # Set proper y-axis limits for percentiles
+                            ax.set_ylim(0, 100)
                             ax.set_xticks(angles)
                             ax.set_xticklabels(radar_labels, fontsize=4, fontweight='bold')
                             ax.set_yticks([20, 40, 60, 80, 100])
@@ -2117,7 +2117,8 @@ if all_events_data:
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
                                                         lw=1, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(0.95, 0.95), fontsize=3)
+                            ax.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 1.15), 
+                                     ncol=len(group_names), fontsize=3, frameon=False)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
