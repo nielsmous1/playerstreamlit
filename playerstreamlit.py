@@ -2126,8 +2126,8 @@ if all_events_data:
                     else:
                         st.info("Radar chart only available for Backs position group")
                 
-                # Bottom right: Line chart showing performance over matches
-                with bottom_cols[1]:
+                # Bottom: Line chart showing performance over matches
+                with bottom_cols[0]:
                     if position_group == 'Backs':
                         
                         # Find all matches played by the selected player
