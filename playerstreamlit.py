@@ -2105,18 +2105,19 @@ if all_events_data:
                             ax.set_theta_offset(np.pi / 2)
                             ax.set_theta_direction(-1)
                             ax.set_rlabel_position(0)
+                            # Add padding to prevent text overlap
+                            ax.set_ylim(0, 120)
                             ax.set_xticks(angles)
-                            ax.set_xticklabels(radar_labels, fontsize=5, fontweight='bold')
-                            ax.set_ylim(0, 100)
+                            ax.set_xticklabels(radar_labels, fontsize=4, fontweight='bold')
                             ax.set_yticks([20, 40, 60, 80, 100])
-                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=5)
+                            ax.set_yticklabels(["20", "40", "60", "80", "100"], fontsize=4)
                             # Keep the inner grid, remove only the outer circle
                             ax.grid(True, alpha=0.2)
                             
                             # Add legend for groups
                             legend_elements = [plt.Line2D([0], [0], color=group_colors[i % len(group_colors)], 
-                                                        lw=1.5, label=group_name) for i, group_name in enumerate(group_names)]
-                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=5)
+                                                        lw=1, label=group_name) for i, group_name in enumerate(group_names)]
+                            ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.1, 1.0), fontsize=3)
                             
                             st.pyplot(fig, use_container_width=True)
                         else:
@@ -2242,6 +2243,62 @@ if all_events_data:
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig_line, use_container_width=True)
+                                
+                                # Add table with all players in position group
+                                st.markdown("**Position Group Rankings**")
+                                
+                                # Create table data
+                                table_data = []
+                                for pname, pstats in valid_players.items():
+                                    if pstats.get('position_group') == position_group:
+                                        # Calculate overall score for this player
+                                        player_group_scores = {}
+                                        for group_name, items in backs_groups.items():
+                                            group_total = 0
+                                            group_count = 0
+                                            
+                                            for _, key in items:
+                                                val = get_value_per96(pstats, key)
+                                                # Calculate percentile rank for this metric
+                                                all_values = []
+                                                for other_pname, other_pstats in valid_players.items():
+                                                    if other_pstats.get('position_group') == position_group:
+                                                        all_values.append(get_value_per96(other_pstats, key))
+                                                
+                                                if all_values:
+                                                    pct = calculate_percentile_rank(all_values, val)
+                                                    group_total += pct
+                                                    group_count += 1
+                                            
+                                            group_rating = (group_total / group_count) if group_count > 0 else 50.0
+                                            player_group_scores[group_name] = group_rating
+                                        
+                                        # Overall score
+                                        overall_score = sum(player_group_scores.values()) / len(player_group_scores) if player_group_scores else 50.0
+                                        
+                                        # Add to table
+                                        row = {
+                                            'Player': pname,
+                                            'Team': pstats.get('team', ''),
+                                            'Minutes': f"{pstats.get('minutes_played', 0):.0f}",
+                                            'Overall': f"{overall_score:.1f}",
+                                        }
+                                        
+                                        # Add individual group scores
+                                        for group_name, score in player_group_scores.items():
+                                            row[group_name] = f"{score:.1f}"
+                                        
+                                        table_data.append(row)
+                                
+                                # Sort by overall score (descending)
+                                table_data.sort(key=lambda x: float(x['Overall']), reverse=True)
+                                
+                                # Display table
+                                if table_data:
+                                    st.dataframe(table_data, use_container_width=True)
+                                else:
+                                    st.info("No players found in this position group")
+                                    
                             else:
                                 st.info("No match data available for line chart")
                         else:
