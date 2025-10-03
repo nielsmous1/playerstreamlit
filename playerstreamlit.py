@@ -1933,7 +1933,7 @@ if all_events_data:
                                         ticks.append(current)
                                         current += step
                                 else:
-                                    while current <= vmax + step:  # Go one step beyond max for other ranges
+                                    while current <= vmax:  # Stop at max for all ranges
                                         ticks.append(current)
                                         current += step
                                 
