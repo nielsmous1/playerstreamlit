@@ -1213,7 +1213,8 @@ if all_events_data:
                 ('Air Duels Won', 'air_duels_won'),
                 ('Air Duels Win %', 'air_duels_win_pct'),
                 ('Successful Tackles', 'successful_tackles'),
-                ('Successful Interceptions', 'successful_interceptions')
+                ('Successful Interceptions', 'successful_interceptions'),
+                ('Successful Pressures', 'successful_pressures')
             ]
         }
 
@@ -1276,7 +1277,8 @@ if all_events_data:
                 'air_duels_won': 0.0,
                 'air_duels_win_pct': 0.0,
                 'successful_tackles': 0.0,
-                'successful_interceptions': 0.0
+                'successful_interceptions': 0.0,
+                'successful_pressures': 0.0
             }
             
             # Calculate actual stats for this match
@@ -1342,6 +1344,10 @@ if all_events_data:
             # Calculate Successful Interceptions
             interception_events = [e for e in player_events if e.get('baseTypeId') == 5 and e.get('subTypeId') == 500]
             match_stats['successful_interceptions'] = len(interception_events)
+            
+            # Calculate Successful Pressures
+            pressure_events = [e for e in player_events if e.get('resultId') == 1 and 213 in e.get('labels', [])]
+            match_stats['successful_pressures'] = len(pressure_events)
             
             # Convert to per-96 minutes
             for key in match_stats:
